@@ -322,14 +322,21 @@ class CharacterPokedexUI:
     
     def on_character_select(self, event):
         """Handle character selection"""
-        selection = self.character_tree.selection()
-        if not selection:
-            return
-        
-        item = self.character_tree.item(selection[0])
-        character_name = item['values'][0]
-        
-        self.load_character_details(character_name)
+        try:
+            selection = self.character_tree.selection()
+            if not selection:
+                return
+            
+            item = self.character_tree.item(selection[0])
+            if not item or 'values' not in item or not item['values']:
+                return
+                
+            character_name = item['values'][0]
+            self.load_character_details(character_name)
+            
+        except Exception as e:
+            print(f"Error in character selection: {e}")
+            self.status_var.set(f"Selection error: {e}")
     
     def load_character_details(self, character_name):
         """Load and display character details"""
@@ -354,13 +361,19 @@ class CharacterPokedexUI:
             # Update dupes
             self.display_dupes(character_data['dupes'])
             
+            # Force UI update
+            self.root.update_idletasks()
+            
             self.status_var.set(f"Loaded details for {character_name}")
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load character details: {e}")
+            error_msg = f"Failed to load character details: {e}"
+            messagebox.showerror("Error", error_msg)
+            self.status_var.set(f"Error loading details: {e}")
     
     def display_stats(self, stats):
         """Display character stats in the stats tab"""
+        self.stats_text.config(state=tk.NORMAL)
         self.stats_text.delete(1.0, tk.END)
         
         self.stats_text.insert(tk.END, "CHARACTER STATS\n")
@@ -383,6 +396,7 @@ class CharacterPokedexUI:
     
     def display_skills(self, skills):
         """Display character skills in the skills tab"""
+        self.skills_text.config(state=tk.NORMAL)
         self.skills_text.delete(1.0, tk.END)
         
         self.skills_text.insert(tk.END, "CHARACTER SKILLS\n")
@@ -404,6 +418,7 @@ class CharacterPokedexUI:
     
     def display_dupes(self, dupes):
         """Display character dupes/prowess in the dupes tab"""
+        self.dupes_text.config(state=tk.NORMAL)
         self.dupes_text.delete(1.0, tk.END)
         
         self.dupes_text.insert(tk.END, "CHARACTER DUPES/PROWESS\n")
