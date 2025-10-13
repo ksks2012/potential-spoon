@@ -96,7 +96,9 @@ class MathicSystem:
     def __init__(self, config_path: str = None):
         """Initialize the mathic system with configuration"""
         if config_path is None:
-            config_path = os.path.join(os.path.dirname(__file__), "mathic_config.json")
+            # Get absolute path to the mathic directory
+            mathic_dir = os.path.dirname(os.path.abspath(__file__))
+            config_path = os.path.join(mathic_dir, "mathic_config.json")
         
         self.config_path = config_path
         self.config = self.load_config()
