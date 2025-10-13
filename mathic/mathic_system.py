@@ -45,6 +45,8 @@ class Module:
     main_stat_value: float = 0.0
     substats: List[Substat] = None
     set_tag: str = ""  # For future set effects
+    total_enhancement_rolls: int = 0  # Track total rolls across all substats
+    max_total_rolls: int = 5  # Maximum total rolls for the entire module
     
     def __post_init__(self):
         if self.substats is None:
@@ -76,6 +78,30 @@ class Module:
             if substat.stat_name == stat_name:
                 return substat
         return None
+    
+    def can_be_enhanced(self) -> bool:
+        """Check if this module can be enhanced further (total rolls limit)"""
+        return self.total_enhancement_rolls < self.max_total_rolls
+    
+    def get_enhanceable_substats(self) -> List[Substat]:
+        """Get substats that can be enhanced based on module's total roll limit"""
+        if not self.can_be_enhanced():
+            return []
+        return [s for s in self.substats if s.can_enhance()]
+    
+    def enhance_substat_with_roll_tracking(self, stat_name: str, roll_value: float) -> bool:
+        """Enhance a specific substat with roll tracking"""
+        if not self.can_be_enhanced():
+            return False
+            
+        for substat in self.substats:
+            if substat.stat_name == stat_name:
+                success = substat.enhance(roll_value)
+                if success:
+                    self.total_enhancement_rolls += 1
+                    self.level += 1
+                return success
+        return False
     
     def calculate_total_stats(self) -> Dict[str, float]:
         """Calculate total stats including main stat and substats"""
@@ -198,8 +224,8 @@ class MathicSystem:
         if not module or not module.substats:
             return None
         
-        # Get substats that can be enhanced
-        enhanceable_substats = [s for s in module.substats if s.can_enhance()]
+        # Get substats that can be enhanced (considering total roll limit)
+        enhanceable_substats = module.get_enhanceable_substats()
         
         if not enhanceable_substats:
             return None
@@ -212,14 +238,43 @@ class MathicSystem:
         roll_range = stat_config["roll_range"]
         roll_value = random.randint(roll_range[0], roll_range[1])
         
-        # Enhance the substat
-        success = selected_substat.enhance(float(roll_value))
+        # Enhance the substat with roll tracking
+        success = module.enhance_substat_with_roll_tracking(selected_substat.stat_name, float(roll_value))
         
         if success:
-            module.level += 1
             return selected_substat.stat_name
         
         return None
+    
+    def enhance_module_specific_substat(self, module: Module, stat_name: str, roll_count: int = 1) -> bool:
+        """Enhance a specific substat by a given number of rolls"""
+        if not module or stat_name not in [s.stat_name for s in module.substats]:
+            return False
+        
+        # Check if module can be enhanced enough times
+        if module.total_enhancement_rolls + roll_count > module.max_total_rolls:
+            return False
+        
+        # Get the substat
+        target_substat = module.get_substat(stat_name)
+        if not target_substat:
+            return False
+        
+        # Check if substat can handle the rolls
+        if target_substat.rolls_used + roll_count > target_substat.max_rolls:
+            return False
+        
+        # Apply enhancements one by one to correctly track rolls
+        stat_config = self.config["substats"][stat_name]
+        roll_range = stat_config["roll_range"]
+        
+        for i in range(roll_count):
+            roll_value = random.randint(roll_range[0], roll_range[1])
+            success = module.enhance_substat_with_roll_tracking(stat_name, float(roll_value))
+            if not success:
+                return False
+        
+        return True
     
     def create_mathic_loadout(self, loadout_name: str) -> Dict[int, Optional[str]]:
         """Create a new mathic loadout with 6 slots"""
