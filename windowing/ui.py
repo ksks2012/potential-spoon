@@ -669,7 +669,8 @@ class CharacterPokedexUI:
         
         ttk.Button(controls_frame, text="New Module", command=self.new_module).grid(row=0, column=0, padx=(0, 5))
         ttk.Button(controls_frame, text="Delete Module", command=self.delete_module).grid(row=0, column=1, padx=(0, 5))
-        ttk.Button(controls_frame, text="Enhance Module", command=self.enhance_module).grid(row=0, column=2)
+        ttk.Button(controls_frame, text="Random Enhance", command=self.enhance_module_random).grid(row=0, column=2, padx=(0, 5))
+        ttk.Button(controls_frame, text="Manual Enhance", command=self.enhance_module_manual).grid(row=0, column=3)
         
         # Right panel - Module details
         right_panel = ttk.LabelFrame(parent_frame, text="Module Details", padding="10")
@@ -724,6 +725,31 @@ class CharacterPokedexUI:
         substats_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
         self.substats_tree.configure(yscrollcommand=substats_scroll.set)
         
+        # Enhancement controls frame
+        enhance_frame = ttk.LabelFrame(right_panel, text="Manual Enhancement", padding="10")
+        enhance_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        
+        # Substat selection
+        ttk.Label(enhance_frame, text="Substat:").grid(row=0, column=0, padx=(0, 5))
+        self.enhance_substat_var = tk.StringVar()
+        self.enhance_substat_combo = ttk.Combobox(enhance_frame, textvariable=self.enhance_substat_var,
+                                                state="readonly", width=15)
+        self.enhance_substat_combo.grid(row=0, column=1, padx=(0, 10))
+        
+        # Roll count selection
+        ttk.Label(enhance_frame, text="Rolls:").grid(row=0, column=2, padx=(0, 5))
+        self.enhance_rolls_var = tk.StringVar(value="1")
+        self.enhance_rolls_combo = ttk.Combobox(enhance_frame, textvariable=self.enhance_rolls_var,
+                                              values=["1", "2", "3", "4", "5"], state="readonly", width=5)
+        self.enhance_rolls_combo.grid(row=0, column=3, padx=(0, 10))
+        
+        # Enhance button
+        ttk.Button(enhance_frame, text="Enhance", command=self.enhance_substat_manual).grid(row=0, column=4)
+        
+        # Enhancement info
+        self.enhance_info_label = ttk.Label(enhance_frame, text="", foreground="darkgreen")
+        self.enhance_info_label.grid(row=1, column=0, columnspan=5, pady=(5, 0))
+        
         # Configure additional grid weights
         left_panel.columnconfigure(0, weight=1)
         left_panel.rowconfigure(0, weight=1)
@@ -739,13 +765,14 @@ class CharacterPokedexUI:
     
     def create_loadout_manager(self, parent_frame):
         """Create loadout manager interface"""
-        # Configure grid weights
-        parent_frame.columnconfigure(0, weight=1)
+        # Configure grid weights - now we have two columns
+        parent_frame.columnconfigure(0, weight=2)  # Left side for slots
+        parent_frame.columnconfigure(1, weight=1)  # Right side for stats
         parent_frame.rowconfigure(1, weight=1)
         
-        # Top frame - Loadout selection
+        # Top frame - Loadout selection (spans both columns)
         top_frame = ttk.Frame(parent_frame)
-        top_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=10, pady=(10, 5))
+        top_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=10, pady=(10, 5))
         
         ttk.Label(top_frame, text="Loadout:").grid(row=0, column=0, padx=(0, 5))
         self.loadout_var = tk.StringVar()
@@ -757,9 +784,9 @@ class CharacterPokedexUI:
         ttk.Button(top_frame, text="New Loadout", command=self.new_loadout).grid(row=0, column=2, padx=(0, 5))
         ttk.Button(top_frame, text="Delete Loadout", command=self.delete_loadout).grid(row=0, column=3)
         
-        # Loadout slots frame
+        # Loadout slots frame (left side)
         slots_frame = ttk.LabelFrame(parent_frame, text="Equipment Slots", padding="10")
-        slots_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=5)
+        slots_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(10, 5), pady=5)
         
         # Create 6 slots in vertical layout (2 columns x 3 rows)
         # slot 1  slot 4
@@ -798,13 +825,25 @@ class CharacterPokedexUI:
             self.slot_labels[slot_id] = ttk.Label(slot_frame, text="Empty", 
                                                 foreground="gray")
             self.slot_labels[slot_id].grid(row=1, column=0)
+            
+            # Substats display area
+            self.slot_substats_labels = getattr(self, 'slot_substats_labels', {})
+            substats_frame = ttk.Frame(slot_frame)
+            substats_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+            
+            # Create 4 small labels for substats
+            self.slot_substats_labels[slot_id] = []
+            for i in range(4):
+                substat_label = ttk.Label(substats_frame, text="", font=("Arial", 7), foreground="darkblue")
+                substat_label.grid(row=i//2, column=i%2, sticky=tk.W, padx=(0, 5))
+                self.slot_substats_labels[slot_id].append(substat_label)
         
-        # Stats summary frame
+        # Stats summary frame (right side)
         stats_frame = ttk.LabelFrame(parent_frame, text="Total Stats", padding="10")
-        stats_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), padx=10, pady=(5, 10))
+        stats_frame.grid(row=1, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(5, 10), pady=5)
         
-        self.stats_summary_text = tk.Text(stats_frame, height=8, wrap=tk.WORD, state=tk.DISABLED)
-        self.stats_summary_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        self.stats_summary_text = tk.Text(stats_frame, height=15, wrap=tk.WORD, state=tk.DISABLED)
+        self.stats_summary_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Configure additional grid weights for vertical layout (2 columns x 3 rows)
         slots_frame.columnconfigure(0, weight=1)
@@ -813,6 +852,7 @@ class CharacterPokedexUI:
         slots_frame.rowconfigure(1, weight=1)
         slots_frame.rowconfigure(2, weight=1)
         stats_frame.columnconfigure(0, weight=1)
+        stats_frame.rowconfigure(0, weight=1)
         
         # Initialize
         self.refresh_loadout_list()
@@ -886,6 +926,7 @@ class CharacterPokedexUI:
             module_id = list(self.mathic_system.modules.keys())[idx]
             module = self.mathic_system.modules[module_id]
             self.display_module_details(module)
+            self.update_enhance_options()
     
     def on_module_type_change(self, event=None):
         """Handle module type change"""
@@ -916,10 +957,13 @@ class CharacterPokedexUI:
                 
                 self.substats_tree.insert('', tk.END, values=(
                     substat.stat_name,
-                    f"{substat.current_value:.1f}",
+                    f"{int(substat.current_value)}",  # Show as integer
                     f"{substat.rolls_used}/{substat.max_rolls}",
                     f"{efficiency:.1f}%"
                 ))
+        
+        # Update module level display to show total rolls
+        level_text = f"Level {module.level} (Total Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})"
     
     def new_module(self):
         """Create a new module"""
@@ -959,8 +1003,8 @@ class CharacterPokedexUI:
             self.refresh_module_list()
             self.refresh_slot_module_options()
     
-    def enhance_module(self):
-        """Enhance selected module"""
+    def enhance_module_random(self):
+        """Randomly enhance selected module"""
         selection = self.module_listbox.curselection()
         if not selection:
             messagebox.showwarning("Warning", "Please select a module to enhance")
@@ -974,9 +1018,106 @@ class CharacterPokedexUI:
         if enhanced_stat:
             self.display_module_details(module)
             self.refresh_module_list()
+            self.update_enhance_options()
             messagebox.showinfo("Success", f"Enhanced {enhanced_stat}")
         else:
             messagebox.showinfo("Info", "No substats can be enhanced further")
+    
+    def enhance_module_manual(self):
+        """Open manual enhancement dialog"""
+        selection = self.module_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a module to enhance")
+            return
+        
+        idx = selection[0]
+        module_id = list(self.mathic_system.modules.keys())[idx]
+        module = self.mathic_system.modules[module_id]
+        
+        # Update enhancement options for the selected module
+        self.update_enhance_options()
+        
+        messagebox.showinfo("Manual Enhancement", 
+                          f"Use the Manual Enhancement section below to enhance {module.module_type} substats.\n"
+                          f"Remaining rolls: {module.max_total_rolls - module.total_enhancement_rolls}")
+    
+    def enhance_substat_manual(self):
+        """Enhance a specific substat manually"""
+        selection = self.module_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a module first")
+            return
+        
+        idx = selection[0]
+        module_id = list(self.mathic_system.modules.keys())[idx]
+        module = self.mathic_system.modules[module_id]
+        
+        substat_name = self.enhance_substat_var.get()
+        if not substat_name:
+            messagebox.showwarning("Warning", "Please select a substat to enhance")
+            return
+        
+        try:
+            roll_count = int(self.enhance_rolls_var.get())
+        except ValueError:
+            messagebox.showerror("Error", "Invalid roll count")
+            return
+        
+        # Check constraints
+        if module.total_enhancement_rolls + roll_count > module.max_total_rolls:
+            remaining = module.max_total_rolls - module.total_enhancement_rolls
+            messagebox.showwarning("Warning", f"Not enough rolls remaining. Only {remaining} rolls left.")
+            return
+        
+        target_substat = module.get_substat(substat_name)
+        if not target_substat:
+            messagebox.showerror("Error", "Substat not found")
+            return
+        
+        if target_substat.rolls_used + roll_count > target_substat.max_rolls:
+            remaining = target_substat.max_rolls - target_substat.rolls_used
+            messagebox.showwarning("Warning", f"Substat can only be enhanced {remaining} more times.")
+            return
+        
+        # Perform enhancement
+        success = self.mathic_system.enhance_module_specific_substat(module, substat_name, roll_count)
+        if success:
+            self.display_module_details(module)
+            self.refresh_module_list()
+            self.update_enhance_options()
+            self.enhance_info_label.config(text=f"Enhanced {substat_name} with {roll_count} roll(s)")
+            messagebox.showinfo("Success", f"Enhanced {substat_name} with {roll_count} roll(s)")
+        else:
+            messagebox.showerror("Error", "Enhancement failed")
+    
+    def update_enhance_options(self):
+        """Update enhancement options based on selected module"""
+        selection = self.module_listbox.curselection()
+        if not selection:
+            self.enhance_substat_combo.configure(values=[])
+            self.enhance_info_label.config(text="No module selected")
+            return
+        
+        idx = selection[0]
+        module_id = list(self.mathic_system.modules.keys())[idx]
+        module = self.mathic_system.modules[module_id]
+        
+        # Get enhanceable substats
+        enhanceable_substats = []
+        for substat in module.substats:
+            if substat.can_enhance() and module.can_be_enhanced():
+                enhanceable_substats.append(substat.stat_name)
+        
+        self.enhance_substat_combo.configure(values=enhanceable_substats)
+        
+        # Update info
+        remaining_rolls = module.max_total_rolls - module.total_enhancement_rolls
+        self.enhance_info_label.config(text=f"Remaining rolls: {remaining_rolls}/{module.max_total_rolls}")
+        
+        if enhanceable_substats and remaining_rolls > 0:
+            self.enhance_substat_var.set(enhanceable_substats[0])
+        else:
+            self.enhance_substat_var.set("")
     
     def refresh_loadout_list(self):
         """Refresh the loadout list"""
@@ -1021,10 +1162,25 @@ class CharacterPokedexUI:
                 if module_id and module_id in self.mathic_system.modules:
                     module = self.mathic_system.modules[module_id]
                     self.slot_vars[slot_id].set(f"{module_id}: {module.module_type} - {module.main_stat}")
-                    self.slot_labels[slot_id].config(text=f"Level {module.level}", foreground="blue")
+                    self.slot_labels[slot_id].config(text=f"Level {module.level} ({module.total_enhancement_rolls}/5 rolls)", foreground="blue")
+                    
+                    # Update substats display
+                    if hasattr(self, 'slot_substats_labels') and slot_id in self.slot_substats_labels:
+                        for i, substat_label in enumerate(self.slot_substats_labels[slot_id]):
+                            if i < len(module.substats):
+                                substat = module.substats[i]
+                                text = f"{substat.stat_name}: {int(substat.current_value)}"
+                                substat_label.config(text=text)
+                            else:
+                                substat_label.config(text="")
                 else:
                     self.slot_vars[slot_id].set("None")
                     self.slot_labels[slot_id].config(text="Empty", foreground="gray")
+                    
+                    # Clear substats display
+                    if hasattr(self, 'slot_substats_labels') and slot_id in self.slot_substats_labels:
+                        for substat_label in self.slot_substats_labels[slot_id]:
+                            substat_label.config(text="")
             
             self.refresh_slot_module_options()
             self.update_loadout_stats()
@@ -1041,13 +1197,28 @@ class CharacterPokedexUI:
             # Clear slot
             self.mathic_system.mathic_loadouts[loadout_name][slot_id] = None
             self.slot_labels[slot_id].config(text="Empty", foreground="gray")
+            
+            # Clear substats display
+            if hasattr(self, 'slot_substats_labels') and slot_id in self.slot_substats_labels:
+                for substat_label in self.slot_substats_labels[slot_id]:
+                    substat_label.config(text="")
         else:
             # Assign module
             module_id = selection.split(":")[0]
             if module_id in self.mathic_system.modules:
                 self.mathic_system.mathic_loadouts[loadout_name][slot_id] = module_id
                 module = self.mathic_system.modules[module_id]
-                self.slot_labels[slot_id].config(text=f"Level {module.level}", foreground="blue")
+                self.slot_labels[slot_id].config(text=f"Level {module.level} ({module.total_enhancement_rolls}/5 rolls)", foreground="blue")
+                
+                # Update substats display
+                if hasattr(self, 'slot_substats_labels') and slot_id in self.slot_substats_labels:
+                    for i, substat_label in enumerate(self.slot_substats_labels[slot_id]):
+                        if i < len(module.substats):
+                            substat = module.substats[i]
+                            text = f"{substat.stat_name}: {int(substat.current_value)}"
+                            substat_label.config(text=text)
+                        else:
+                            substat_label.config(text="")
         
         self.update_loadout_stats()
     
