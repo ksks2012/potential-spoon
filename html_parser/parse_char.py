@@ -5,9 +5,10 @@ import re
 import json
 
 
-class PlumeParser:
-    def __init__(self):
-        self.html_file = "/home/hong/code/python/etheria_sim/var/Plume.html"
+class CharacterParser:
+    def __init__(self, html_file_path):
+        """Initialize parser with HTML file path as parameter"""
+        self.html_file = html_file_path
         self.soup = None
         self.data = {}
         self.character_data = {}
@@ -433,16 +434,22 @@ class PlumeParser:
 
 
 def main():
-    # Set the path to the HTML file
-    html_file = './var/Plume.html'
+    # Check command line arguments
+    if len(sys.argv) < 2:
+        print("Usage: python parse_char.py <html_file_path>")
+        print("Example: python parse_char.py ./var/Plume.html")
+        return
+    
+    # Get HTML file path from command line argument
+    html_file = sys.argv[1]
     
     # Check if file exists
     if not os.path.exists(html_file):
         print(f"Error: HTML file not found at {html_file}")
         return
     
-    # Create parser instance
-    parser = PlumeParser()
+    # Create parser instance with HTML file path
+    parser = CharacterParser(html_file)
     
     # Parse the HTML file
     data = parser.parse_all()
@@ -452,7 +459,7 @@ def main():
         parser.print_summary()
         
         # Save to JSON file
-        output_file = './var/plume_data.json'
+        output_file = html_file.replace('.html', '_data.json')
         parser.save_to_json(output_file)
     else:
         print("Failed to parse HTML file")
