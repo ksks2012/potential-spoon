@@ -15,7 +15,7 @@ class CharacterPokedexUI:
     def __init__(self, root):
         """Initialize the UI"""
         self.root = root
-        self.root.title("Etheria Character Pokedex")
+        self.root.title("Etheria Simulation Suite")
         self.root.geometry("1000x700")
         self.root.resizable(True, True)
         
@@ -42,16 +42,11 @@ class CharacterPokedexUI:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
-        main_frame.rowconfigure(1, weight=1)
-        
-        # Title
-        title_label = ttk.Label(main_frame, text="Etheria Simulation Suite", 
-                               font=('Arial', 20, 'bold'))
-        title_label.grid(row=0, column=0, pady=(0, 20))
+        main_frame.rowconfigure(0, weight=1)
         
         # Main notebook for top-level tabs
         self.main_notebook = ttk.Notebook(main_frame)
-        self.main_notebook.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.main_notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Create Character Pokedex tab
         self.create_character_tab()
@@ -62,7 +57,7 @@ class CharacterPokedexUI:
         # Status bar at the bottom
         self.status_var = tk.StringVar(value="Ready")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
-        status_bar.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        status_bar.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
     
     def create_character_tab(self):
         """Create the Character Pokedex tab"""
@@ -693,10 +688,12 @@ class CharacterPokedexUI:
         self.main_stat_combo = ttk.Combobox(type_frame, textvariable=self.main_stat_var,
                                           state="readonly", width=12)
         self.main_stat_combo.grid(row=0, column=3, padx=(0, 10))
+        self.main_stat_combo.bind('<<ComboboxSelected>>', self.on_main_stat_change)
         
         ttk.Label(type_frame, text="Value:").grid(row=0, column=4, padx=(0, 5))
         self.main_stat_value_var = tk.StringVar()
-        self.main_stat_entry = ttk.Entry(type_frame, textvariable=self.main_stat_value_var, width=8)
+        self.main_stat_entry = ttk.Entry(type_frame, textvariable=self.main_stat_value_var, 
+                                       width=8, state="readonly")
         self.main_stat_entry.grid(row=0, column=5)
         
         # Substats frame
@@ -725,30 +722,95 @@ class CharacterPokedexUI:
         substats_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
         self.substats_tree.configure(yscrollcommand=substats_scroll.set)
         
-        # Enhancement controls frame
-        enhance_frame = ttk.LabelFrame(right_panel, text="Manual Enhancement", padding="10")
-        enhance_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        # Module editing controls frame
+        edit_frame = ttk.LabelFrame(right_panel, text="Module Editing", padding="10")
+        edit_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
         
-        # Substat selection
-        ttk.Label(enhance_frame, text="Substat:").grid(row=0, column=0, padx=(0, 5))
-        self.enhance_substat_var = tk.StringVar()
-        self.enhance_substat_combo = ttk.Combobox(enhance_frame, textvariable=self.enhance_substat_var,
-                                                state="readonly", width=15)
-        self.enhance_substat_combo.grid(row=0, column=1, padx=(0, 10))
+        # Total rolls control
+        ttk.Label(edit_frame, text="Total Rolls:").grid(row=0, column=0, padx=(0, 5))
+        self.total_rolls_var = tk.StringVar(value="0")
+        self.total_rolls_spinbox = ttk.Spinbox(edit_frame, textvariable=self.total_rolls_var,
+                                             from_=0, to=5, width=5, 
+                                             command=self.on_total_rolls_change)
+        self.total_rolls_spinbox.grid(row=0, column=1, padx=(0, 10))
         
-        # Roll count selection
-        ttk.Label(enhance_frame, text="Rolls:").grid(row=0, column=2, padx=(0, 5))
-        self.enhance_rolls_var = tk.StringVar(value="1")
-        self.enhance_rolls_combo = ttk.Combobox(enhance_frame, textvariable=self.enhance_rolls_var,
-                                              values=["1", "2", "3", "4", "5"], state="readonly", width=5)
-        self.enhance_rolls_combo.grid(row=0, column=3, padx=(0, 10))
+        # Substat editing controls
+        ttk.Label(edit_frame, text="Edit Substat:").grid(row=1, column=0, padx=(0, 5), pady=(10, 0))
         
-        # Enhance button
-        ttk.Button(enhance_frame, text="Enhance", command=self.enhance_substat_manual).grid(row=0, column=4)
+        # Substat 1
+        substat1_frame = ttk.Frame(edit_frame)
+        substat1_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(5, 0))
+        ttk.Label(substat1_frame, text="1:").grid(row=0, column=0, padx=(0, 5))
+        self.substat1_type_var = tk.StringVar()
+        self.substat1_combo = ttk.Combobox(substat1_frame, textvariable=self.substat1_type_var,
+                                         width=12, state="readonly")
+        self.substat1_combo.grid(row=0, column=1, padx=(0, 5))
+        self.substat1_value_var = tk.StringVar()
+        self.substat1_entry = ttk.Entry(substat1_frame, textvariable=self.substat1_value_var, width=8)
+        self.substat1_entry.grid(row=0, column=2, padx=(0, 5))
+        self.substat1_rolls_var = tk.StringVar(value="0")
+        self.substat1_spinbox = ttk.Spinbox(substat1_frame, textvariable=self.substat1_rolls_var,
+                                          from_=0, to=5, width=5)
+        self.substat1_spinbox.grid(row=0, column=3)
         
-        # Enhancement info
-        self.enhance_info_label = ttk.Label(enhance_frame, text="", foreground="darkgreen")
-        self.enhance_info_label.grid(row=1, column=0, columnspan=5, pady=(5, 0))
+        # Substat 2
+        substat2_frame = ttk.Frame(edit_frame)
+        substat2_frame.grid(row=3, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(2, 0))
+        ttk.Label(substat2_frame, text="2:").grid(row=0, column=0, padx=(0, 5))
+        self.substat2_type_var = tk.StringVar()
+        self.substat2_combo = ttk.Combobox(substat2_frame, textvariable=self.substat2_type_var,
+                                         width=12, state="readonly")
+        self.substat2_combo.grid(row=0, column=1, padx=(0, 5))
+        self.substat2_value_var = tk.StringVar()
+        self.substat2_entry = ttk.Entry(substat2_frame, textvariable=self.substat2_value_var, width=8)
+        self.substat2_entry.grid(row=0, column=2, padx=(0, 5))
+        self.substat2_rolls_var = tk.StringVar(value="0")
+        self.substat2_spinbox = ttk.Spinbox(substat2_frame, textvariable=self.substat2_rolls_var,
+                                          from_=0, to=5, width=5)
+        self.substat2_spinbox.grid(row=0, column=3)
+        
+        # Substat 3
+        substat3_frame = ttk.Frame(edit_frame)
+        substat3_frame.grid(row=4, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(2, 0))
+        ttk.Label(substat3_frame, text="3:").grid(row=0, column=0, padx=(0, 5))
+        self.substat3_type_var = tk.StringVar()
+        self.substat3_combo = ttk.Combobox(substat3_frame, textvariable=self.substat3_type_var,
+                                         width=12, state="readonly")
+        self.substat3_combo.grid(row=0, column=1, padx=(0, 5))
+        self.substat3_value_var = tk.StringVar()
+        self.substat3_entry = ttk.Entry(substat3_frame, textvariable=self.substat3_value_var, width=8)
+        self.substat3_entry.grid(row=0, column=2, padx=(0, 5))
+        self.substat3_rolls_var = tk.StringVar(value="0")
+        self.substat3_spinbox = ttk.Spinbox(substat3_frame, textvariable=self.substat3_rolls_var,
+                                          from_=0, to=5, width=5)
+        self.substat3_spinbox.grid(row=0, column=3)
+        
+        # Substat 4
+        substat4_frame = ttk.Frame(edit_frame)
+        substat4_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(2, 0))
+        ttk.Label(substat4_frame, text="4:").grid(row=0, column=0, padx=(0, 5))
+        self.substat4_type_var = tk.StringVar()
+        self.substat4_combo = ttk.Combobox(substat4_frame, textvariable=self.substat4_type_var,
+                                         width=12, state="readonly")
+        self.substat4_combo.grid(row=0, column=1, padx=(0, 5))
+        self.substat4_value_var = tk.StringVar()
+        self.substat4_entry = ttk.Entry(substat4_frame, textvariable=self.substat4_value_var, width=8)
+        self.substat4_entry.grid(row=0, column=2, padx=(0, 5))
+        self.substat4_rolls_var = tk.StringVar(value="0")
+        self.substat4_spinbox = ttk.Spinbox(substat4_frame, textvariable=self.substat4_rolls_var,
+                                          from_=0, to=5, width=5)
+        self.substat4_spinbox.grid(row=0, column=3)
+        
+        # Apply changes button
+        ttk.Button(edit_frame, text="Apply Changes", command=self.apply_module_changes).grid(row=6, column=0, pady=(10, 0))
+        
+        # Store substat controls for easy access
+        self.substat_controls = [
+            (self.substat1_combo, self.substat1_entry, self.substat1_spinbox, self.substat1_type_var, self.substat1_value_var, self.substat1_rolls_var),
+            (self.substat2_combo, self.substat2_entry, self.substat2_spinbox, self.substat2_type_var, self.substat2_value_var, self.substat2_rolls_var),
+            (self.substat3_combo, self.substat3_entry, self.substat3_spinbox, self.substat3_type_var, self.substat3_value_var, self.substat3_rolls_var),
+            (self.substat4_combo, self.substat4_entry, self.substat4_spinbox, self.substat4_type_var, self.substat4_value_var, self.substat4_rolls_var),
+        ]
         
         # Configure additional grid weights
         left_panel.columnconfigure(0, weight=1)
@@ -821,21 +883,16 @@ class CharacterPokedexUI:
             self.slot_combos[slot_id].bind('<<ComboboxSelected>>', 
                                          lambda e, s=slot_id: self.on_slot_module_change(s))
             
-            # Module info label
-            self.slot_labels[slot_id] = ttk.Label(slot_frame, text="Empty", 
-                                                foreground="gray")
-            self.slot_labels[slot_id].grid(row=1, column=0)
-            
-            # Substats display area
+            # Substats display area (vertical layout)
             self.slot_substats_labels = getattr(self, 'slot_substats_labels', {})
             substats_frame = ttk.Frame(slot_frame)
-            substats_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+            substats_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
             
-            # Create 4 small labels for substats
+            # Create 4 labels for substats in vertical layout
             self.slot_substats_labels[slot_id] = []
             for i in range(4):
-                substat_label = ttk.Label(substats_frame, text="", font=("Arial", 7), foreground="darkblue")
-                substat_label.grid(row=i//2, column=i%2, sticky=tk.W, padx=(0, 5))
+                substat_label = ttk.Label(substats_frame, text="", font=("Arial", 10), foreground="darkblue")
+                substat_label.grid(row=i, column=0, sticky=tk.W, pady=1)
                 self.slot_substats_labels[slot_id].append(substat_label)
         
         # Stats summary frame (right side)
@@ -932,10 +989,49 @@ class CharacterPokedexUI:
         """Handle module type change"""
         module_type = self.module_type_var.get()
         if module_type in self.mathic_system.config.get("module_types", {}):
-            main_stat_options = self.mathic_system.config["module_types"][module_type]["main_stat_options"]
+            module_config = self.mathic_system.config["module_types"][module_type]
+            main_stat_options = module_config["main_stat_options"]
             self.main_stat_combo.configure(values=main_stat_options)
             if main_stat_options:
                 self.main_stat_var.set(main_stat_options[0])
+                # Auto-fill main stat value
+                self.on_main_stat_change()
+        
+        # Update substat options
+        self.update_substat_options()
+    
+    def on_main_stat_change(self, event=None):
+        """Handle main stat change - auto-fill the value"""
+        module_type = self.module_type_var.get()
+        main_stat = self.main_stat_var.get()
+        
+        if (module_type in self.mathic_system.config.get("module_types", {}) and 
+            main_stat in self.mathic_system.config["module_types"][module_type]["max_main_stats"]):
+            max_value = self.mathic_system.config["module_types"][module_type]["max_main_stats"][main_stat]
+            self.main_stat_value_var.set(str(int(max_value)))
+    
+    def update_substat_options(self):
+        """Update substat combo options based on main stat"""
+        available_stats = list(self.mathic_system.config.get("substats", {}).keys())
+        main_stat = self.main_stat_var.get()
+        
+        # Remove main stat from available substats
+        if main_stat in available_stats:
+            available_stats.remove(main_stat)
+        
+        # Remove percentage version if flat version is main stat (and vice versa)
+        main_stat_base = main_stat.replace('%', '')
+        for stat in available_stats[:]:
+            stat_base = stat.replace('%', '')
+            if stat_base == main_stat_base and stat != main_stat:
+                available_stats.remove(stat)
+        
+        # Add "None" option at the beginning
+        substat_options = [""] + available_stats
+        
+        # Update all substat combos
+        for combo, _, _, _, _, _ in self.substat_controls:
+            combo.configure(values=substat_options)
     
     def display_module_details(self, module):
         """Display module details in the editor"""
@@ -962,8 +1058,83 @@ class CharacterPokedexUI:
                     f"{efficiency:.1f}%"
                 ))
         
-        # Update module level display to show total rolls
-        level_text = f"Level {module.level} (Total Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})"
+        # Update editing controls
+        self.update_editing_controls(module)
+        
+    def update_editing_controls(self, module):
+        """Update the editing controls with module data"""
+        # Set total rolls
+        self.total_rolls_var.set(str(module.total_enhancement_rolls))
+        
+        # Set substat data
+        for i in range(4):
+            combo, entry, spinbox, type_var, value_var, rolls_var = self.substat_controls[i]
+            if i < len(module.substats):
+                substat = module.substats[i]
+                type_var.set(substat.stat_name)
+                value_var.set(str(int(substat.current_value)))
+                rolls_var.set(str(substat.rolls_used))
+            else:
+                type_var.set("")
+                value_var.set("")
+                rolls_var.set("0")
+    
+    def on_total_rolls_change(self):
+        """Handle total rolls change"""
+        try:
+            total_rolls = int(self.total_rolls_var.get())
+            # Update module level accordingly
+            selection = self.module_listbox.curselection()
+            if selection:
+                idx = selection[0]
+                module_id = list(self.mathic_system.modules.keys())[idx]
+                module = self.mathic_system.modules[module_id]
+                module.level = total_rolls
+        except ValueError:
+            pass
+    
+    def apply_module_changes(self):
+        """Apply the changes made in the editing controls"""
+        selection = self.module_listbox.curselection()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a module to edit")
+            return
+        
+        idx = selection[0]
+        module_id = list(self.mathic_system.modules.keys())[idx]
+        module = self.mathic_system.modules[module_id]
+        
+        try:
+            # Update total rolls
+            total_rolls = int(self.total_rolls_var.get())
+            module.total_enhancement_rolls = total_rolls
+            module.level = total_rolls
+            
+            # Clear existing substats
+            module.substats = []
+            
+            # Add new substats
+            for combo, entry, spinbox, type_var, value_var, rolls_var in self.substat_controls:
+                stat_name = type_var.get()
+                if stat_name and stat_name != "":
+                    try:
+                        value = float(value_var.get()) if value_var.get() else 0.0
+                        rolls = int(rolls_var.get()) if rolls_var.get() else 0
+                        
+                        # Create and add substat
+                        from mathic.mathic_system import Substat
+                        substat = Substat(stat_name, value, rolls)
+                        module.substats.append(substat)
+                    except ValueError:
+                        continue
+            
+            # Refresh displays
+            self.display_module_details(module)
+            self.refresh_module_list()
+            messagebox.showinfo("Success", "Module updated successfully")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update module: {e}")
     
     def new_module(self):
         """Create a new module"""
@@ -1162,20 +1333,18 @@ class CharacterPokedexUI:
                 if module_id and module_id in self.mathic_system.modules:
                     module = self.mathic_system.modules[module_id]
                     self.slot_vars[slot_id].set(f"{module_id}: {module.module_type} - {module.main_stat}")
-                    self.slot_labels[slot_id].config(text=f"Level {module.level} ({module.total_enhancement_rolls}/5 rolls)", foreground="blue")
                     
-                    # Update substats display
+                    # Update substats display (vertical layout)
                     if hasattr(self, 'slot_substats_labels') and slot_id in self.slot_substats_labels:
                         for i, substat_label in enumerate(self.slot_substats_labels[slot_id]):
                             if i < len(module.substats):
                                 substat = module.substats[i]
-                                text = f"{substat.stat_name}: {int(substat.current_value)}"
+                                text = f"{substat.stat_name}: +{int(substat.current_value)}"
                                 substat_label.config(text=text)
                             else:
                                 substat_label.config(text="")
                 else:
                     self.slot_vars[slot_id].set("None")
-                    self.slot_labels[slot_id].config(text="Empty", foreground="gray")
                     
                     # Clear substats display
                     if hasattr(self, 'slot_substats_labels') and slot_id in self.slot_substats_labels:
@@ -1196,7 +1365,6 @@ class CharacterPokedexUI:
         if selection == "None":
             # Clear slot
             self.mathic_system.mathic_loadouts[loadout_name][slot_id] = None
-            self.slot_labels[slot_id].config(text="Empty", foreground="gray")
             
             # Clear substats display
             if hasattr(self, 'slot_substats_labels') and slot_id in self.slot_substats_labels:
@@ -1208,14 +1376,13 @@ class CharacterPokedexUI:
             if module_id in self.mathic_system.modules:
                 self.mathic_system.mathic_loadouts[loadout_name][slot_id] = module_id
                 module = self.mathic_system.modules[module_id]
-                self.slot_labels[slot_id].config(text=f"Level {module.level} ({module.total_enhancement_rolls}/5 rolls)", foreground="blue")
                 
-                # Update substats display
+                # Update substats display (vertical layout)
                 if hasattr(self, 'slot_substats_labels') and slot_id in self.slot_substats_labels:
                     for i, substat_label in enumerate(self.slot_substats_labels[slot_id]):
                         if i < len(module.substats):
                             substat = module.substats[i]
-                            text = f"{substat.stat_name}: {int(substat.current_value)}"
+                            text = f"{substat.stat_name}: +{int(substat.current_value)}"
                             substat_label.config(text=text)
                         else:
                             substat_label.config(text="")
