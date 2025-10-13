@@ -187,9 +187,9 @@ class MathicSystem:
         for stat_name in selected_stats:
             stat_config = self.config["substats"][stat_name]
             roll_range = stat_config["roll_range"]
-            initial_value = random.uniform(roll_range[0], roll_range[1])
+            initial_value = random.randint(roll_range[0], roll_range[1])
             
-            module.add_substat(stat_name, initial_value)
+            module.add_substat(stat_name, float(initial_value))
         
         return True
     
@@ -210,10 +210,10 @@ class MathicSystem:
         # Get roll value
         stat_config = self.config["substats"][selected_substat.stat_name]
         roll_range = stat_config["roll_range"]
-        roll_value = random.uniform(roll_range[0], roll_range[1])
+        roll_value = random.randint(roll_range[0], roll_range[1])
         
         # Enhance the substat
-        success = selected_substat.enhance(roll_value)
+        success = selected_substat.enhance(float(roll_value))
         
         if success:
             module.level += 1
