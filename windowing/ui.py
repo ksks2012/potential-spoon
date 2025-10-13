@@ -761,16 +761,23 @@ class CharacterPokedexUI:
         slots_frame = ttk.LabelFrame(parent_frame, text="Equipment Slots", padding="10")
         slots_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=5)
         
-        # Create 6 slots in 2x3 grid
+        # Create 6 slots in vertical layout (2 columns x 3 rows)
+        # slot 1  slot 4
+        # slot 2  slot 5  
+        # slot 3  slot 6
         self.slot_frames = {}
         self.slot_labels = {}
         self.slot_combos = {}
         self.slot_vars = {}
         
+        slot_positions = [
+            (0, 0), (1, 0), (2, 0),  # Column 1: slots 1, 2, 3
+            (0, 1), (1, 1), (2, 1)   # Column 2: slots 4, 5, 6
+        ]
+        
         for i in range(6):
             slot_id = i + 1
-            row = i // 3
-            col = i % 3
+            row, col = slot_positions[i]
             
             slot_frame = ttk.LabelFrame(slots_frame, text=f"Slot {slot_id}", padding="10")
             slot_frame.grid(row=row, column=col, sticky=(tk.W, tk.E, tk.N, tk.S), 
@@ -799,12 +806,12 @@ class CharacterPokedexUI:
         self.stats_summary_text = tk.Text(stats_frame, height=8, wrap=tk.WORD, state=tk.DISABLED)
         self.stats_summary_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
         
-        # Configure additional grid weights
+        # Configure additional grid weights for vertical layout (2 columns x 3 rows)
         slots_frame.columnconfigure(0, weight=1)
         slots_frame.columnconfigure(1, weight=1)
-        slots_frame.columnconfigure(2, weight=1)
         slots_frame.rowconfigure(0, weight=1)
         slots_frame.rowconfigure(1, weight=1)
+        slots_frame.rowconfigure(2, weight=1)
         stats_frame.columnconfigure(0, weight=1)
         
         # Initialize
@@ -980,12 +987,27 @@ class CharacterPokedexUI:
             self.on_loadout_select()
     
     def refresh_slot_module_options(self):
-        """Refresh module options for all slots"""
-        module_options = ["None"] + [f"{mid}: {mod.module_type} - {mod.main_stat}" 
-                                   for mid, mod in self.mathic_system.modules.items()]
+        """Refresh module options for all slots with type restrictions"""
+        # Get slot type restrictions from config
+        slot_restrictions = {
+            1: ["mask"],
+            2: ["transistor"], 
+            3: ["wristwheel"],
+            4: ["core"],
+            5: ["core"],
+            6: ["core"]
+        }
         
         for slot_id in range(1, 7):
-            self.slot_combos[slot_id].configure(values=module_options)
+            allowed_types = slot_restrictions.get(slot_id, [])
+            
+            # Filter modules by allowed types for this slot
+            slot_module_options = ["None"]
+            for mid, mod in self.mathic_system.modules.items():
+                if mod.module_type in allowed_types:
+                    slot_module_options.append(f"{mid}: {mod.module_type} - {mod.main_stat}")
+            
+            self.slot_combos[slot_id].configure(values=slot_module_options)
     
     def on_loadout_select(self, event=None):
         """Handle loadout selection"""
