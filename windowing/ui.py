@@ -258,6 +258,11 @@ class CharacterPokedexUI:
         mathic_notebook.add(module_frame, text="Module Editor")
         self.create_module_editor(module_frame)
         
+        # Enhance Simulator tab
+        enhance_frame = ttk.Frame(mathic_notebook, padding="10")
+        mathic_notebook.add(enhance_frame, text="Enhance Simulator")
+        self.create_enhance_simulator(enhance_frame)
+        
         # Loadout Manager tab
         loadout_frame = ttk.Frame(mathic_notebook, padding="10")
         mathic_notebook.add(loadout_frame, text="Loadout Manager")
@@ -664,8 +669,7 @@ class CharacterPokedexUI:
         
         ttk.Button(controls_frame, text="New Module", command=self.new_module).grid(row=0, column=0, padx=(0, 5))
         ttk.Button(controls_frame, text="Delete Module", command=self.delete_module).grid(row=0, column=1, padx=(0, 5))
-        ttk.Button(controls_frame, text="Random Enhance", command=self.enhance_module_random).grid(row=0, column=2, padx=(0, 5))
-        ttk.Button(controls_frame, text="Manual Enhance", command=self.enhance_module_manual).grid(row=0, column=3)
+        ttk.Button(controls_frame, text="Manual Enhance", command=self.enhance_module_manual).grid(row=0, column=2)
         
         # Right panel - Module details
         right_panel = ttk.LabelFrame(parent_frame, text="Module Details", padding="10")
@@ -913,6 +917,101 @@ class CharacterPokedexUI:
         
         # Initialize
         self.refresh_loadout_list()
+    
+    def create_enhance_simulator(self, parent_frame):
+        """Create enhance simulator interface"""
+        # Configure grid weights
+        parent_frame.columnconfigure(0, weight=1)
+        parent_frame.columnconfigure(1, weight=1)
+        parent_frame.rowconfigure(1, weight=1)
+        
+        # Top frame - Module selection
+        top_frame = ttk.Frame(parent_frame)
+        top_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        ttk.Label(top_frame, text="Select Module for Enhancement:").grid(row=0, column=0, padx=(0, 10))
+        self.enhance_module_var = tk.StringVar()
+        self.enhance_module_combo = ttk.Combobox(top_frame, textvariable=self.enhance_module_var,
+                                               state="readonly", width=30)
+        self.enhance_module_combo.grid(row=0, column=1, padx=(0, 10))
+        self.enhance_module_combo.bind('<<ComboboxSelected>>', self.on_enhance_module_select)
+        
+        ttk.Button(top_frame, text="Refresh Modules", command=self.refresh_enhance_modules).grid(row=0, column=2)
+        
+        # Left panel - Enhancement controls and current module info
+        left_panel = ttk.LabelFrame(parent_frame, text="Enhancement Controls", padding="10")
+        left_panel.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 5))
+        
+        # Current module info
+        current_info_frame = ttk.LabelFrame(left_panel, text="Current Module", padding="10")
+        current_info_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        self.current_module_text = tk.Text(current_info_frame, height=8, wrap=tk.WORD, state=tk.DISABLED)
+        self.current_module_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        
+        # Enhancement buttons
+        enhance_buttons_frame = ttk.Frame(left_panel)
+        enhance_buttons_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        
+        ttk.Button(enhance_buttons_frame, text="Enhance Once", command=self.enhance_once).grid(row=0, column=0, padx=(0, 10))
+        ttk.Button(enhance_buttons_frame, text="Enhance 5 Times", command=self.enhance_five_times).grid(row=0, column=1, padx=(0, 10))
+        ttk.Button(enhance_buttons_frame, text="Enhance to Max", command=self.enhance_to_max).grid(row=0, column=2)
+        
+        # Enhancement log
+        log_frame = ttk.LabelFrame(left_panel, text="Enhancement Log", padding="10")
+        log_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
+        
+        self.enhancement_log = tk.Text(log_frame, height=10, wrap=tk.WORD, state=tk.DISABLED)
+        self.enhancement_log.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        log_scroll = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.enhancement_log.yview)
+        log_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.enhancement_log.configure(yscrollcommand=log_scroll.set)
+        
+        # Right panel - Statistics and probabilities
+        right_panel = ttk.LabelFrame(parent_frame, text="Statistics & Analysis", padding="10")
+        right_panel.grid(row=1, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(5, 0))
+        
+        # Substat probabilities
+        prob_frame = ttk.LabelFrame(right_panel, text="Enhancement Probabilities", padding="10")
+        prob_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        self.probability_tree = ttk.Treeview(prob_frame, columns=('Probability',), show='tree headings', height=8)
+        self.probability_tree.heading('#0', text='Substat')
+        self.probability_tree.heading('Probability', text='Probability (%)')
+        self.probability_tree.column('#0', width=150)
+        self.probability_tree.column('Probability', width=100)
+        self.probability_tree.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        
+        prob_scroll = ttk.Scrollbar(prob_frame, orient=tk.VERTICAL, command=self.probability_tree.yview)
+        prob_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.probability_tree.configure(yscrollcommand=prob_scroll.set)
+        
+        # Module value analysis
+        value_frame = ttk.LabelFrame(right_panel, text="Module Value Analysis", padding="10")
+        value_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
+        
+        self.value_analysis_text = tk.Text(value_frame, height=12, wrap=tk.WORD, state=tk.DISABLED)
+        self.value_analysis_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        value_scroll = ttk.Scrollbar(value_frame, orient=tk.VERTICAL, command=self.value_analysis_text.yview)
+        value_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.value_analysis_text.configure(yscrollcommand=value_scroll.set)
+        
+        # Configure grid weights
+        left_panel.columnconfigure(0, weight=1)
+        left_panel.rowconfigure(2, weight=1)
+        right_panel.columnconfigure(0, weight=1)
+        right_panel.rowconfigure(1, weight=1)
+        current_info_frame.columnconfigure(0, weight=1)
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
+        prob_frame.columnconfigure(0, weight=1)
+        value_frame.columnconfigure(0, weight=1)
+        value_frame.rowconfigure(0, weight=1)
+        
+        # Initialize
+        self.refresh_enhance_modules()
     
     def create_system_overview(self, parent_frame):
         """Create system overview interface"""
@@ -1211,6 +1310,195 @@ class CharacterPokedexUI:
         messagebox.showinfo("Manual Enhancement", 
                           f"Use the Manual Enhancement section below to enhance {module.module_type} substats.\n"
                           f"Remaining rolls: {module.max_total_rolls - module.total_enhancement_rolls}")
+    
+    # Enhance Simulator functions
+    def refresh_enhance_modules(self):
+        """Refresh the module list for enhance simulator"""
+        module_options = []
+        for module_id, module in self.mathic_system.modules.items():
+            display_text = f"{module_id}: {module.module_type} - {module.main_stat}"
+            module_options.append(display_text)
+        
+        self.enhance_module_combo.configure(values=module_options)
+        if module_options and not self.enhance_module_var.get():
+            self.enhance_module_var.set(module_options[0])
+            self.on_enhance_module_select()
+    
+    def on_enhance_module_select(self, event=None):
+        """Handle module selection in enhance simulator"""
+        selection = self.enhance_module_var.get()
+        if not selection:
+            return
+        
+        module_id = selection.split(":")[0]
+        if module_id in self.mathic_system.modules:
+            module = self.mathic_system.modules[module_id]
+            self.update_current_module_display(module)
+            self.update_probability_display(module)
+            self.update_value_analysis_display(module)
+    
+    def update_current_module_display(self, module):
+        """Update current module information display"""
+        self.current_module_text.config(state=tk.NORMAL)
+        self.current_module_text.delete(1.0, tk.END)
+        
+        info_text = f"Module: {module.module_type}\n"
+        info_text += f"Main Stat: {module.main_stat} ({int(module.main_stat_value)})\n"
+        info_text += f"Level: {module.level} (Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})\n"
+        info_text += f"Substats: {len(module.substats)}/4\n\n"
+        
+        if module.substats:
+            info_text += "Current Substats:\n"
+            for i, substat in enumerate(module.substats, 1):
+                max_val = self.mathic_system.config["substats"][substat.stat_name]["max_value"]
+                efficiency = substat.get_efficiency_percentage(max_val)
+                info_text += f"{i}. {substat.stat_name}: {int(substat.current_value)} "
+                info_text += f"({substat.rolls_used}/{substat.max_rolls} rolls, {efficiency:.1f}%)\n"
+        else:
+            info_text += "No substats yet\n"
+        
+        self.current_module_text.insert(1.0, info_text)
+        self.current_module_text.config(state=tk.DISABLED)
+    
+    def update_probability_display(self, module):
+        """Update probability display for next enhancement"""
+        # Clear existing items
+        for item in self.probability_tree.get_children():
+            self.probability_tree.delete(item)
+        
+        probabilities = self.mathic_system.calculate_substat_probabilities(module)
+        
+        if probabilities:
+            for stat_name, prob in probabilities.items():
+                self.probability_tree.insert('', tk.END, text=stat_name, 
+                                            values=(f"{prob*100:.1f}%",))
+        else:
+            self.probability_tree.insert('', tk.END, text="No enhancements possible", 
+                                        values=("0.0%",))
+    
+    def update_value_analysis_display(self, module):
+        """Update module value analysis display"""
+        self.value_analysis_text.config(state=tk.NORMAL)
+        self.value_analysis_text.delete(1.0, tk.END)
+        
+        value_data = self.mathic_system.calculate_module_value(module)
+        
+        analysis_text = "MODULE VALUE ANALYSIS\n"
+        analysis_text += "="*30 + "\n\n"
+        
+        analysis_text += f"Total Value Score: {value_data['total_value']:.2f}\n"
+        analysis_text += f"Overall Efficiency: {value_data['efficiency']:.1f}%\n"
+        analysis_text += f"Roll Efficiency: {value_data['roll_efficiency']:.1f}%\n\n"
+        
+        if value_data['details']:
+            analysis_text += "Substat Breakdown:\n"
+            analysis_text += "-" * 20 + "\n"
+            
+            for stat_name, details in value_data['details'].items():
+                analysis_text += f"{stat_name}:\n"
+                analysis_text += f"  Value: {int(details['current_value'])}\n"
+                analysis_text += f"  Efficiency: {details['efficiency']:.1f}%\n"
+                analysis_text += f"  Rolls: {details['rolls_used']}/5\n"
+                analysis_text += f"  Score: {details['substat_value']:.2f}\n"
+                analysis_text += f"  Importance: {details['importance']:.1f}\n\n"
+        
+        enhancement_potential = module.max_total_rolls - module.total_enhancement_rolls
+        if enhancement_potential > 0:
+            analysis_text += f"Enhancement Potential:\n"
+            analysis_text += f"Remaining rolls: {enhancement_potential}\n"
+            if len(module.substats) < 4:
+                new_substats_possible = min(4 - len(module.substats), enhancement_potential)
+                analysis_text += f"New substats possible: {new_substats_possible}\n"
+        else:
+            analysis_text += "Module fully enhanced\n"
+        
+        self.value_analysis_text.insert(1.0, analysis_text)
+        self.value_analysis_text.config(state=tk.DISABLED)
+    
+    def enhance_once(self):
+        """Enhance the selected module once"""
+        self.perform_enhancement(1)
+    
+    def enhance_five_times(self):
+        """Enhance the selected module 5 times"""
+        self.perform_enhancement(5)
+    
+    def enhance_to_max(self):
+        """Enhance the selected module to maximum"""
+        selection = self.enhance_module_var.get()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a module")
+            return
+        
+        module_id = selection.split(":")[0]
+        if module_id in self.mathic_system.modules:
+            module = self.mathic_system.modules[module_id]
+            remaining_rolls = module.max_total_rolls - module.total_enhancement_rolls
+            if remaining_rolls > 0:
+                self.perform_enhancement(remaining_rolls)
+            else:
+                messagebox.showinfo("Info", "Module is already at maximum enhancement")
+    
+    def perform_enhancement(self, times):
+        """Perform enhancement multiple times and log results"""
+        selection = self.enhance_module_var.get()
+        if not selection:
+            messagebox.showwarning("Warning", "Please select a module")
+            return
+        
+        module_id = selection.split(":")[0]
+        if module_id not in self.mathic_system.modules:
+            messagebox.showerror("Error", "Module not found")
+            return
+        
+        module = self.mathic_system.modules[module_id]
+        
+        # Check if enhancement is possible
+        if not module.can_be_enhanced():
+            messagebox.showinfo("Info", "Module cannot be enhanced further")
+            return
+        
+        # Log enhancement start
+        self.enhancement_log.config(state=tk.NORMAL)
+        self.enhancement_log.insert(tk.END, f"\n--- Starting {times} enhancement(s) for {module.module_type} ---\n")
+        
+        success_count = 0
+        for i in range(times):
+            if not module.can_be_enhanced():
+                self.enhancement_log.insert(tk.END, f"Enhancement {i+1}: Module fully enhanced\n")
+                break
+            
+            enhanced_stat = self.mathic_system.enhance_module_random_substat(module)
+            if enhanced_stat:
+                success_count += 1
+                if enhanced_stat.startswith("New substat:"):
+                    self.enhancement_log.insert(tk.END, f"Enhancement {i+1}: {enhanced_stat}\n")
+                else:
+                    # Get the actual roll value for logging
+                    substat = module.get_substat(enhanced_stat)
+                    if substat:
+                        self.enhancement_log.insert(tk.END, 
+                                                   f"Enhancement {i+1}: Enhanced {enhanced_stat} "
+                                                   f"(Current: {int(substat.current_value)}, "
+                                                   f"Rolls: {substat.rolls_used}/5)\n")
+            else:
+                self.enhancement_log.insert(tk.END, f"Enhancement {i+1}: Failed\n")
+                break
+        
+        self.enhancement_log.insert(tk.END, f"Completed {success_count}/{times} enhancements\n")
+        self.enhancement_log.insert(tk.END, f"Module level: {module.level} "
+                                            f"(Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})\n")
+        self.enhancement_log.config(state=tk.DISABLED)
+        self.enhancement_log.see(tk.END)
+        
+        # Update displays
+        self.update_current_module_display(module)
+        self.update_probability_display(module)
+        self.update_value_analysis_display(module)
+        
+        # Update module list in Module Editor if it exists
+        if hasattr(self, 'module_listbox'):
+            self.refresh_module_list()
     
     def enhance_substat_manual(self):
         """Enhance a specific substat manually"""

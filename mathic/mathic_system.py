@@ -221,8 +221,27 @@ class MathicSystem:
     
     def enhance_module_random_substat(self, module: Module) -> Optional[str]:
         """Randomly enhance one substat of a module"""
-        if not module or not module.substats:
+        if not module:
             return None
+        
+        # Check if module can be enhanced
+        if not module.can_be_enhanced():
+            return None
+        
+        # Check if we need to add a new substat first
+        if len(module.substats) < 4:
+            # Add a new random substat
+            available_stats = self.get_available_substats_for_module(module)
+            if available_stats:
+                stat_name = random.choice(available_stats)
+                stat_config = self.config["substats"][stat_name]
+                roll_range = stat_config["roll_range"]
+                initial_value = random.randint(roll_range[0], roll_range[1])
+                
+                module.add_substat(stat_name, float(initial_value))
+                module.total_enhancement_rolls += 1
+                module.level += 1
+                return f"New substat: {stat_name}"
         
         # Get substats that can be enhanced (considering total roll limit)
         enhanceable_substats = module.get_enhanceable_substats()
@@ -275,6 +294,105 @@ class MathicSystem:
                 return False
         
         return True
+    
+    def get_available_substats_for_module(self, module: Module) -> List[str]:
+        """Get available substats that can be added to a module"""
+        available_stats = list(self.config.get("substats", {}).keys())
+        
+        # Remove main stat
+        if module.main_stat in available_stats:
+            available_stats.remove(module.main_stat)
+        
+        # Remove percentage version if flat version is main stat (and vice versa)
+        main_stat_base = module.main_stat.replace('%', '')
+        for stat in available_stats[:]:
+            stat_base = stat.replace('%', '')
+            if stat_base == main_stat_base and stat != module.main_stat:
+                available_stats.remove(stat)
+        
+        # Remove already existing substats
+        existing_stats = [substat.stat_name for substat in module.substats]
+        for stat in existing_stats:
+            if stat in available_stats:
+                available_stats.remove(stat)
+        
+        return available_stats
+    
+    def calculate_substat_probabilities(self, module: Module) -> Dict[str, float]:
+        """Calculate probability of getting each substat when enhancing"""
+        probabilities = {}
+        
+        # If module has less than 4 substats, there's a chance to get new ones
+        if len(module.substats) < 4:
+            available_stats = self.get_available_substats_for_module(module)
+            # Probability of getting a new substat = 1 / (existing_enhanceable + available_new)
+            enhanceable_count = len(module.get_enhanceable_substats())
+            total_options = enhanceable_count + len(available_stats)
+            
+            if total_options > 0:
+                new_substat_prob = len(available_stats) / total_options
+                existing_substat_prob = enhanceable_count / total_options
+                
+                # Distribute probability among new substats
+                if available_stats:
+                    for stat in available_stats:
+                        probabilities[f"New: {stat}"] = new_substat_prob / len(available_stats)
+                
+                # Distribute probability among existing substats
+                enhanceable_substats = module.get_enhanceable_substats()
+                if enhanceable_substats:
+                    for substat in enhanceable_substats:
+                        probabilities[substat.stat_name] = existing_substat_prob / len(enhanceable_substats)
+        else:
+            # Only existing substats can be enhanced
+            enhanceable_substats = module.get_enhanceable_substats()
+            if enhanceable_substats:
+                prob_per_stat = 1.0 / len(enhanceable_substats)
+                for substat in enhanceable_substats:
+                    probabilities[substat.stat_name] = prob_per_stat
+        
+        return probabilities
+    
+    def calculate_module_value(self, module: Module) -> Dict[str, Any]:
+        """Calculate module value based on substats and rolls"""
+        if not module or not module.substats:
+            return {"total_value": 0.0, "efficiency": 0.0, "details": {}}
+        
+        total_value = 0.0
+        total_max_value = 0.0
+        details = {}
+        
+        for substat in module.substats:
+            if substat.stat_name in self.config["substats"]:
+                stat_config = self.config["substats"][substat.stat_name]
+                max_possible = stat_config["max_value"]
+                current_efficiency = substat.get_efficiency_percentage(max_possible)
+                
+                # Value calculation: efficiency * importance weight * roll utilization
+                importance_weight = stat_config.get("importance", 1.0)  # Default importance 1.0
+                roll_utilization = substat.rolls_used / substat.max_rolls if substat.max_rolls > 0 else 0
+                
+                substat_value = (current_efficiency / 100) * importance_weight * (1 + roll_utilization * 0.5)
+                
+                total_value += substat_value
+                total_max_value += importance_weight * 1.5  # Max possible value per substat
+                
+                details[substat.stat_name] = {
+                    "current_value": substat.current_value,
+                    "efficiency": current_efficiency,
+                    "rolls_used": substat.rolls_used,
+                    "substat_value": substat_value,
+                    "importance": importance_weight
+                }
+        
+        overall_efficiency = (total_value / total_max_value * 100) if total_max_value > 0 else 0
+        
+        return {
+            "total_value": total_value,
+            "efficiency": overall_efficiency,
+            "roll_efficiency": module.total_enhancement_rolls / module.max_total_rolls * 100,
+            "details": details
+        }
     
     def create_mathic_loadout(self, loadout_name: str) -> Dict[int, Optional[str]]:
         """Create a new mathic loadout with 6 slots"""
