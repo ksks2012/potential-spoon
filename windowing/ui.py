@@ -725,13 +725,13 @@ class CharacterPokedexUI:
         edit_frame = ttk.LabelFrame(right_panel, text="Module Editing", padding="10")
         edit_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
         
-        # Total rolls control
+        # Total rolls display (read-only, automatically calculated)
         ttk.Label(edit_frame, text="Total Rolls:").grid(row=0, column=0, padx=(0, 5))
         self.total_rolls_var = tk.StringVar(value="0")
-        self.total_rolls_spinbox = ttk.Spinbox(edit_frame, textvariable=self.total_rolls_var,
-                                             from_=0, to=5, width=5, 
-                                             command=self.on_total_rolls_change)
-        self.total_rolls_spinbox.grid(row=0, column=1, padx=(0, 10))
+        self.total_rolls_label = ttk.Label(edit_frame, textvariable=self.total_rolls_var,
+                                         font=('Arial', 10, 'bold'), foreground="darkblue")
+        self.total_rolls_label.grid(row=0, column=1, padx=(0, 10))
+        ttk.Label(edit_frame, text="(auto-calculated)", font=('Arial', 8), foreground="gray").grid(row=0, column=2, padx=(0, 10))
         
         # Substat editing controls
         ttk.Label(edit_frame, text="Edit Substat:").grid(row=1, column=0, padx=(0, 5), pady=(10, 0))
@@ -818,6 +818,10 @@ class CharacterPokedexUI:
         right_panel.rowconfigure(1, weight=1)
         substats_frame.columnconfigure(0, weight=1)
         substats_frame.rowconfigure(0, weight=1)
+        
+        # Initialize selection tracking
+        self.current_selected_module_id = None
+        self.current_selected_index = None
         
         # Initialize
         self.create_sample_modules()
@@ -1076,6 +1080,9 @@ class CharacterPokedexUI:
             idx = selection[0]
             module_id = list(self.mathic_system.modules.keys())[idx]
             module = self.mathic_system.modules[module_id]
+            # Store current selection for later reference
+            self.current_selected_module_id = module_id
+            self.current_selected_index = idx
             self.display_module_details(module)
             self.update_enhance_options()
     
@@ -1133,11 +1140,11 @@ class CharacterPokedexUI:
         self.substat3_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(3))
         self.substat4_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(4))
         
-        # Bind roll spinbox value changes to update value options
-        self.substat1_rolls_var.trace('w', lambda *args: self.update_substat_value_options(1))
-        self.substat2_rolls_var.trace('w', lambda *args: self.update_substat_value_options(2))
-        self.substat3_rolls_var.trace('w', lambda *args: self.update_substat_value_options(3))
-        self.substat4_rolls_var.trace('w', lambda *args: self.update_substat_value_options(4))
+        # Bind roll spinbox value changes to update value options and total rolls
+        self.substat1_rolls_var.trace('w', lambda *args: self.on_substat_rolls_change(1))
+        self.substat2_rolls_var.trace('w', lambda *args: self.on_substat_rolls_change(2))
+        self.substat3_rolls_var.trace('w', lambda *args: self.on_substat_rolls_change(3))
+        self.substat4_rolls_var.trace('w', lambda *args: self.on_substat_rolls_change(4))
     
     def display_module_details(self, module):
         """Display module details in the editor"""
@@ -1169,10 +1176,7 @@ class CharacterPokedexUI:
         
     def update_editing_controls(self, module):
         """Update the editing controls with module data"""
-        # Set total rolls
-        self.total_rolls_var.set(str(module.total_enhancement_rolls))
-        
-        # Set substat data
+        # Set substat data first
         for i in range(4):
             combo, value_combo, spinbox, type_var, value_var, rolls_var = self.substat_controls[i]
             if i < len(module.substats):
@@ -1188,6 +1192,9 @@ class CharacterPokedexUI:
                 rolls_var.set("0")
                 # Clear value options
                 value_combo.configure(values=[])
+        
+        # Update total rolls display automatically based on individual rolls
+        self.update_total_rolls_display()
     
     def update_substat_value_options(self, substat_index):
         """Update value options based on substat type and roll count"""
@@ -1235,46 +1242,53 @@ class CharacterPokedexUI:
             
             value_combo.configure(values=value_options)
             
-            # Set default to maximum value if current value is empty
+            # Preserve current value if it's valid, otherwise set to maximum
             current_value = value_var.get()
             if not current_value and value_options:
-                value_var.set(value_options[-1])  # Set to max value
+                value_var.set(value_options[-1])  # Set to max value only if empty
+            elif current_value and current_value not in value_options and value_options:
+                # If current value is not valid for new roll count, set to closest valid value
+                try:
+                    current_float = float(current_value)
+                    # Find closest valid value
+                    closest_value = min(value_options, key=lambda x: abs(float(x) - current_float))
+                    value_var.set(closest_value)
+                except ValueError:
+                    value_var.set(value_options[-1])
         else:
             value_combo.configure(values=[])
     
-    def on_total_rolls_change(self):
-        """Handle total rolls change"""
+    def on_substat_rolls_change(self, substat_index):
+        """Handle substat rolls change - update value options and total rolls"""
+        self.update_substat_value_options(substat_index)
+        self.update_total_rolls_display()
+    
+    def update_total_rolls_display(self):
+        """Update total rolls display based on individual substat rolls"""
         try:
-            total_rolls = int(self.total_rolls_var.get())
-            # Update module level accordingly
-            selection = self.module_listbox.curselection()
-            if selection:
-                idx = selection[0]
-                module_id = list(self.mathic_system.modules.keys())[idx]
-                module = self.mathic_system.modules[module_id]
-                module.level = total_rolls
+            total = 0
+            for _, _, _, _, _, rolls_var in self.substat_controls:
+                rolls = int(rolls_var.get()) if rolls_var.get() else 0
+                total += rolls
+            self.total_rolls_var.set(str(total))
         except ValueError:
-            pass
+            self.total_rolls_var.set("0")
     
     def apply_module_changes(self):
         """Apply the changes made in the editing controls"""
-        # Store current selection for restoration later
-        selection = self.module_listbox.curselection()
-        if not selection:
+        # Use tracked selection instead of current selection to avoid UI interaction issues
+        if not hasattr(self, 'current_selected_module_id') or self.current_selected_module_id is None:
             messagebox.showwarning("Warning", "Please select a module to edit")
             return
         
-        idx = selection[0]
-        module_id = list(self.mathic_system.modules.keys())[idx]
+        module_id = self.current_selected_module_id
+        if module_id not in self.mathic_system.modules:
+            messagebox.showerror("Error", "Selected module no longer exists")
+            return
+        
         module = self.mathic_system.modules[module_id]
         
         try:
-            # Validate total rolls
-            total_rolls = int(self.total_rolls_var.get())
-            if total_rolls < 0 or total_rolls > module.max_total_rolls:
-                messagebox.showerror("Error", f"Total rolls must be between 0 and {module.max_total_rolls}")
-                return
-            
             # Collect and validate substats
             new_substats = []
             used_stats = set()
@@ -1315,11 +1329,13 @@ class CharacterPokedexUI:
                         messagebox.showerror("Error", f"Invalid value for substat {i+1}: {e}")
                         return
             
-            # Validate total rolls vs individual rolls
-            total_individual_rolls = sum(substat.rolls_used for substat in new_substats)
-            if total_individual_rolls != total_rolls:
+            # Calculate total rolls automatically from individual rolls
+            total_rolls = sum(substat.rolls_used for substat in new_substats)
+            
+            # Validate total rolls don't exceed maximum
+            if total_rolls > module.max_total_rolls:
                 messagebox.showerror("Error", 
-                                   f"Total rolls ({total_rolls}) doesn't match sum of individual rolls ({total_individual_rolls})")
+                                   f"Total rolls ({total_rolls}) exceeds maximum allowed ({module.max_total_rolls})")
                 return
             
             # Apply changes
@@ -1327,16 +1343,20 @@ class CharacterPokedexUI:
             module.level = total_rolls
             module.substats = new_substats
             
+            # Update total rolls display automatically
+            self.total_rolls_var.set(str(total_rolls))
+            
             # Refresh displays first
             self.refresh_module_list()
             
-            # Restore selection before displaying details
-            try:
-                self.module_listbox.selection_set(idx)
-                self.module_listbox.activate(idx)
-                self.module_listbox.see(idx)  # Ensure the item is visible
-            except:
-                pass  # Selection restoration failed, but not critical
+            # Restore selection using tracked index
+            if hasattr(self, 'current_selected_index') and self.current_selected_index is not None:
+                try:
+                    self.module_listbox.selection_set(self.current_selected_index)
+                    self.module_listbox.activate(self.current_selected_index)
+                    self.module_listbox.see(self.current_selected_index)
+                except:
+                    pass  # Selection restoration failed, but not critical
             
             # Display details after selection is restored
             self.display_module_details(module)
