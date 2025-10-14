@@ -242,16 +242,11 @@ class CharacterPokedexUI:
         
         # Configure grid weights
         mathic_frame.columnconfigure(0, weight=1)
-        mathic_frame.rowconfigure(1, weight=1)
+        mathic_frame.rowconfigure(0, weight=1)
         
-        # Title and description
-        title_label = ttk.Label(mathic_frame, text="Mathic Equipment System", 
-                               font=('Arial', 16, 'bold'))
-        title_label.grid(row=0, column=0, pady=(0, 20))
-        
-        # Create notebook for mathic subsystems
+        # Create notebook for mathic subsystems (now takes full space)
         mathic_notebook = ttk.Notebook(mathic_frame)
-        mathic_notebook.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        mathic_notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
         # Module Editor tab
         module_frame = ttk.Frame(mathic_notebook, padding="10")
@@ -1332,16 +1327,19 @@ class CharacterPokedexUI:
             module.level = total_rolls
             module.substats = new_substats
             
-            # Refresh displays and restore selection
+            # Refresh displays first
             self.refresh_module_list()
-            self.display_module_details(module)
             
-            # Restore selection
+            # Restore selection before displaying details
             try:
                 self.module_listbox.selection_set(idx)
                 self.module_listbox.activate(idx)
+                self.module_listbox.see(idx)  # Ensure the item is visible
             except:
                 pass  # Selection restoration failed, but not critical
+            
+            # Display details after selection is restored
+            self.display_module_details(module)
             
             messagebox.showinfo("Success", "Module updated successfully")
             
@@ -1351,7 +1349,7 @@ class CharacterPokedexUI:
             messagebox.showerror("Error", f"Failed to update module: {e}")
     
     def new_module(self):
-        """Create a new module"""
+        """Create a new module using values from the editing panel"""
         module_type = self.module_type_var.get()
         main_stat = self.main_stat_var.get()
         
@@ -1360,15 +1358,93 @@ class CharacterPokedexUI:
             return
         
         try:
+            # Get main stat value from the editing panel
+            main_stat_value = float(self.main_stat_value_var.get()) if self.main_stat_value_var.get() else 0.0
+            
+            # Validate total rolls
+            try:
+                total_rolls = int(self.total_rolls_var.get())
+                if total_rolls < 0 or total_rolls > 5:
+                    messagebox.showerror("Error", "Total rolls must be between 0 and 5")
+                    return
+            except ValueError:
+                total_rolls = 0
+            
+            # Collect substats from editing panel
+            new_substats = []
+            used_stats = set()
+            
+            for i, (combo, entry, spinbox, type_var, value_var, rolls_var) in enumerate(self.substat_controls):
+                stat_name = type_var.get()
+                if stat_name and stat_name != "":
+                    # Check for duplicate substats
+                    if stat_name in used_stats:
+                        messagebox.showerror("Error", f"Duplicate substat: {stat_name}\nEach substat can only appear once.")
+                        return
+                    used_stats.add(stat_name)
+                    
+                    try:
+                        value = float(value_var.get()) if value_var.get() else 0.0
+                        rolls = int(rolls_var.get()) if rolls_var.get() else 0
+                        
+                        # Validate rolls
+                        if rolls < 0 or rolls > 5:
+                            messagebox.showerror("Error", f"Rolls for {stat_name} must be between 0 and 5")
+                            return
+                        
+                        # Validate value based on stat config
+                        if stat_name in self.mathic_system.config["substats"]:
+                            stat_config = self.mathic_system.config["substats"][stat_name]
+                            max_possible = stat_config["max_value"]
+                            if value > max_possible:
+                                messagebox.showerror("Error", 
+                                                   f"Value for {stat_name} ({value}) exceeds maximum ({max_possible})")
+                                return
+                        
+                        # Create substat
+                        from mathic.mathic_system import Substat
+                        substat = Substat(stat_name, value, rolls)
+                        new_substats.append(substat)
+                        
+                    except ValueError as e:
+                        messagebox.showerror("Error", f"Invalid value for substat {i+1}: {e}")
+                        return
+            
+            # Validate total rolls vs individual rolls
+            total_individual_rolls = sum(substat.rolls_used for substat in new_substats)
+            if total_individual_rolls != total_rolls:
+                messagebox.showerror("Error", 
+                                   f"Total rolls ({total_rolls}) doesn't match sum of individual rolls ({total_individual_rolls})")
+                return
+            
+            # Create the module
             slot_position = len(self.mathic_system.modules) + 1
             module = self.mathic_system.create_module(module_type, slot_position, main_stat)
             
             if module:
-                # Generate random substats
-                self.mathic_system.generate_random_substats(module, 4)
+                # Set the main stat value from the panel
+                if main_stat_value > 0:
+                    module.main_stat_value = main_stat_value
+                
+                # Set the substats from the editing panel
+                module.substats = new_substats
+                module.total_enhancement_rolls = total_rolls
+                module.level = total_rolls
+                
                 self.refresh_module_list()
                 self.refresh_slot_module_options()
-                messagebox.showinfo("Success", f"Created new {module_type} module")
+                
+                # Select the newly created module
+                try:
+                    new_idx = len(self.mathic_system.modules) - 1
+                    self.module_listbox.selection_set(new_idx)
+                    self.module_listbox.activate(new_idx)
+                    self.module_listbox.see(new_idx)
+                    self.display_module_details(module)
+                except:
+                    pass
+                
+                messagebox.showinfo("Success", f"Created new {module_type} module with custom values")
             else:
                 messagebox.showerror("Error", "Failed to create module")
         except Exception as e:
