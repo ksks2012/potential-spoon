@@ -750,11 +750,11 @@ class CharacterPokedexUI:
                                          width=12, state="readonly")
         self.substat1_combo.grid(row=0, column=1, padx=(0, 5))
         self.substat1_value_var = tk.StringVar()
-        self.substat1_entry = ttk.Entry(substat1_frame, textvariable=self.substat1_value_var, width=8)
-        self.substat1_entry.grid(row=0, column=2, padx=(0, 5))
+        self.substat1_value_combo = ttk.Combobox(substat1_frame, textvariable=self.substat1_value_var, width=8)
+        self.substat1_value_combo.grid(row=0, column=2, padx=(0, 5))
         self.substat1_rolls_var = tk.StringVar(value="0")
         self.substat1_spinbox = ttk.Spinbox(substat1_frame, textvariable=self.substat1_rolls_var,
-                                          from_=0, to=5, width=5)
+                                          from_=0, to=5, width=5, command=lambda: self.update_substat_value_options(1))
         self.substat1_spinbox.grid(row=0, column=3)
         
         # Substat 2
@@ -766,11 +766,11 @@ class CharacterPokedexUI:
                                          width=12, state="readonly")
         self.substat2_combo.grid(row=0, column=1, padx=(0, 5))
         self.substat2_value_var = tk.StringVar()
-        self.substat2_entry = ttk.Entry(substat2_frame, textvariable=self.substat2_value_var, width=8)
-        self.substat2_entry.grid(row=0, column=2, padx=(0, 5))
+        self.substat2_value_combo = ttk.Combobox(substat2_frame, textvariable=self.substat2_value_var, width=8)
+        self.substat2_value_combo.grid(row=0, column=2, padx=(0, 5))
         self.substat2_rolls_var = tk.StringVar(value="0")
         self.substat2_spinbox = ttk.Spinbox(substat2_frame, textvariable=self.substat2_rolls_var,
-                                          from_=0, to=5, width=5)
+                                          from_=0, to=5, width=5, command=lambda: self.update_substat_value_options(2))
         self.substat2_spinbox.grid(row=0, column=3)
         
         # Substat 3
@@ -782,11 +782,11 @@ class CharacterPokedexUI:
                                          width=12, state="readonly")
         self.substat3_combo.grid(row=0, column=1, padx=(0, 5))
         self.substat3_value_var = tk.StringVar()
-        self.substat3_entry = ttk.Entry(substat3_frame, textvariable=self.substat3_value_var, width=8)
-        self.substat3_entry.grid(row=0, column=2, padx=(0, 5))
+        self.substat3_value_combo = ttk.Combobox(substat3_frame, textvariable=self.substat3_value_var, width=8)
+        self.substat3_value_combo.grid(row=0, column=2, padx=(0, 5))
         self.substat3_rolls_var = tk.StringVar(value="0")
         self.substat3_spinbox = ttk.Spinbox(substat3_frame, textvariable=self.substat3_rolls_var,
-                                          from_=0, to=5, width=5)
+                                          from_=0, to=5, width=5, command=lambda: self.update_substat_value_options(3))
         self.substat3_spinbox.grid(row=0, column=3)
         
         # Substat 4
@@ -798,11 +798,11 @@ class CharacterPokedexUI:
                                          width=12, state="readonly")
         self.substat4_combo.grid(row=0, column=1, padx=(0, 5))
         self.substat4_value_var = tk.StringVar()
-        self.substat4_entry = ttk.Entry(substat4_frame, textvariable=self.substat4_value_var, width=8)
-        self.substat4_entry.grid(row=0, column=2, padx=(0, 5))
+        self.substat4_value_combo = ttk.Combobox(substat4_frame, textvariable=self.substat4_value_var, width=8)
+        self.substat4_value_combo.grid(row=0, column=2, padx=(0, 5))
         self.substat4_rolls_var = tk.StringVar(value="0")
         self.substat4_spinbox = ttk.Spinbox(substat4_frame, textvariable=self.substat4_rolls_var,
-                                          from_=0, to=5, width=5)
+                                          from_=0, to=5, width=5, command=lambda: self.update_substat_value_options(4))
         self.substat4_spinbox.grid(row=0, column=3)
         
         # Apply changes button
@@ -810,10 +810,10 @@ class CharacterPokedexUI:
         
         # Store substat controls for easy access
         self.substat_controls = [
-            (self.substat1_combo, self.substat1_entry, self.substat1_spinbox, self.substat1_type_var, self.substat1_value_var, self.substat1_rolls_var),
-            (self.substat2_combo, self.substat2_entry, self.substat2_spinbox, self.substat2_type_var, self.substat2_value_var, self.substat2_rolls_var),
-            (self.substat3_combo, self.substat3_entry, self.substat3_spinbox, self.substat3_type_var, self.substat3_value_var, self.substat3_rolls_var),
-            (self.substat4_combo, self.substat4_entry, self.substat4_spinbox, self.substat4_type_var, self.substat4_value_var, self.substat4_rolls_var),
+            (self.substat1_combo, self.substat1_value_combo, self.substat1_spinbox, self.substat1_type_var, self.substat1_value_var, self.substat1_rolls_var),
+            (self.substat2_combo, self.substat2_value_combo, self.substat2_spinbox, self.substat2_type_var, self.substat2_value_var, self.substat2_rolls_var),
+            (self.substat3_combo, self.substat3_value_combo, self.substat3_spinbox, self.substat3_type_var, self.substat3_value_var, self.substat3_rolls_var),
+            (self.substat4_combo, self.substat4_value_combo, self.substat4_spinbox, self.substat4_type_var, self.substat4_value_var, self.substat4_rolls_var),
         ]
         
         # Configure additional grid weights
@@ -1131,6 +1131,18 @@ class CharacterPokedexUI:
         # Update all substat combos
         for combo, _, _, _, _, _ in self.substat_controls:
             combo.configure(values=substat_options)
+        
+        # Bind substat type change events to update value options
+        self.substat1_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(1))
+        self.substat2_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(2))
+        self.substat3_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(3))
+        self.substat4_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(4))
+        
+        # Bind roll spinbox value changes to update value options
+        self.substat1_rolls_var.trace('w', lambda *args: self.update_substat_value_options(1))
+        self.substat2_rolls_var.trace('w', lambda *args: self.update_substat_value_options(2))
+        self.substat3_rolls_var.trace('w', lambda *args: self.update_substat_value_options(3))
+        self.substat4_rolls_var.trace('w', lambda *args: self.update_substat_value_options(4))
     
     def display_module_details(self, module):
         """Display module details in the editor"""
@@ -1167,16 +1179,73 @@ class CharacterPokedexUI:
         
         # Set substat data
         for i in range(4):
-            combo, entry, spinbox, type_var, value_var, rolls_var = self.substat_controls[i]
+            combo, value_combo, spinbox, type_var, value_var, rolls_var = self.substat_controls[i]
             if i < len(module.substats):
                 substat = module.substats[i]
                 type_var.set(substat.stat_name)
                 value_var.set(str(int(substat.current_value)))
                 rolls_var.set(str(substat.rolls_used))
+                # Update value options for this substat
+                self.update_substat_value_options(i + 1)
             else:
                 type_var.set("")
                 value_var.set("")
                 rolls_var.set("0")
+                # Clear value options
+                value_combo.configure(values=[])
+    
+    def update_substat_value_options(self, substat_index):
+        """Update value options based on substat type and roll count"""
+        if not hasattr(self, 'substat_controls') or substat_index < 1 or substat_index > 4:
+            return
+        
+        idx = substat_index - 1
+        combo, value_combo, spinbox, type_var, value_var, rolls_var = self.substat_controls[idx]
+        
+        stat_name = type_var.get()
+        if not stat_name or stat_name == "":
+            value_combo.configure(values=[])
+            return
+        
+        try:
+            rolls = int(rolls_var.get()) if rolls_var.get() else 0
+        except ValueError:
+            rolls = 0
+        
+        if stat_name in self.mathic_system.config["substats"]:
+            stat_config = self.mathic_system.config["substats"][stat_name]
+            roll_range = stat_config["roll_range"]
+            min_roll, max_roll = roll_range
+            
+            # Calculate possible values based on rolls
+            value_options = []
+            
+            if rolls == 0:
+                # Initial roll - single roll range
+                for val in range(min_roll, max_roll + 1):
+                    value_options.append(str(val))
+            else:
+                # Multiple rolls - calculate possible totals
+                min_total = min_roll + (rolls - 1) * min_roll  # minimum possible
+                max_total = max_roll + (rolls - 1) * max_roll  # maximum possible
+                
+                # Create reasonable intervals for selection
+                step = max(1, (max_total - min_total) // 20)  # At most 20 options
+                for val in range(min_total, max_total + 1, step):
+                    value_options.append(str(val))
+                
+                # Always include the maximum possible value
+                if str(max_total) not in value_options:
+                    value_options.append(str(max_total))
+            
+            value_combo.configure(values=value_options)
+            
+            # Set default to maximum value if current value is empty
+            current_value = value_var.get()
+            if not current_value and value_options:
+                value_var.set(value_options[-1])  # Set to max value
+        else:
+            value_combo.configure(values=[])
     
     def on_total_rolls_change(self):
         """Handle total rolls change"""
@@ -1194,6 +1263,7 @@ class CharacterPokedexUI:
     
     def apply_module_changes(self):
         """Apply the changes made in the editing controls"""
+        # Store current selection for restoration later
         selection = self.module_listbox.curselection()
         if not selection:
             messagebox.showwarning("Warning", "Please select a module to edit")
@@ -1204,34 +1274,79 @@ class CharacterPokedexUI:
         module = self.mathic_system.modules[module_id]
         
         try:
-            # Update total rolls
+            # Validate total rolls
             total_rolls = int(self.total_rolls_var.get())
-            module.total_enhancement_rolls = total_rolls
-            module.level = total_rolls
+            if total_rolls < 0 or total_rolls > module.max_total_rolls:
+                messagebox.showerror("Error", f"Total rolls must be between 0 and {module.max_total_rolls}")
+                return
             
-            # Clear existing substats
-            module.substats = []
+            # Collect and validate substats
+            new_substats = []
+            used_stats = set()
             
-            # Add new substats
-            for combo, entry, spinbox, type_var, value_var, rolls_var in self.substat_controls:
+            for i, (combo, entry, spinbox, type_var, value_var, rolls_var) in enumerate(self.substat_controls):
                 stat_name = type_var.get()
                 if stat_name and stat_name != "":
+                    # Check for duplicate substats
+                    if stat_name in used_stats:
+                        messagebox.showerror("Error", f"Duplicate substat: {stat_name}\nEach substat can only appear once.")
+                        return
+                    used_stats.add(stat_name)
+                    
                     try:
                         value = float(value_var.get()) if value_var.get() else 0.0
                         rolls = int(rolls_var.get()) if rolls_var.get() else 0
                         
-                        # Create and add substat
+                        # Validate rolls
+                        if rolls < 0 or rolls > 5:
+                            messagebox.showerror("Error", f"Rolls for {stat_name} must be between 0 and 5")
+                            return
+                        
+                        # Validate value based on stat config
+                        if stat_name in self.mathic_system.config["substats"]:
+                            stat_config = self.mathic_system.config["substats"][stat_name]
+                            max_possible = stat_config["max_value"]
+                            if value > max_possible:
+                                messagebox.showerror("Error", 
+                                                   f"Value for {stat_name} ({value}) exceeds maximum ({max_possible})")
+                                return
+                        
+                        # Create substat
                         from mathic.mathic_system import Substat
                         substat = Substat(stat_name, value, rolls)
-                        module.substats.append(substat)
-                    except ValueError:
-                        continue
+                        new_substats.append(substat)
+                        
+                    except ValueError as e:
+                        messagebox.showerror("Error", f"Invalid value for substat {i+1}: {e}")
+                        return
             
-            # Refresh displays
-            self.display_module_details(module)
+            # Validate total rolls vs individual rolls
+            total_individual_rolls = sum(substat.rolls_used for substat in new_substats)
+            if total_individual_rolls != total_rolls:
+                messagebox.showerror("Error", 
+                                   f"Total rolls ({total_rolls}) doesn't match sum of individual rolls ({total_individual_rolls})")
+                return
+            
+            # Apply changes
+            module.total_enhancement_rolls = total_rolls
+            module.level = total_rolls
+            module.substats = new_substats
+            
+            # Refresh displays and restore selection
             self.refresh_module_list()
+            self.display_module_details(module)
+            
+            # Restore selection
+            try:
+                self.module_listbox.selection_set(idx)
+                self.module_listbox.activate(idx)
+            except:
+                pass  # Selection restoration failed, but not critical
+            
             messagebox.showinfo("Success", "Module updated successfully")
             
+        except ValueError as e:
+            messagebox.showerror("Error", f"Invalid input: {e}")
         except Exception as e:
             messagebox.showerror("Error", f"Failed to update module: {e}")
     
@@ -1501,82 +1616,16 @@ class CharacterPokedexUI:
             self.refresh_module_list()
     
     def enhance_substat_manual(self):
-        """Enhance a specific substat manually"""
-        selection = self.module_listbox.curselection()
-        if not selection:
-            messagebox.showwarning("Warning", "Please select a module first")
-            return
-        
-        idx = selection[0]
-        module_id = list(self.mathic_system.modules.keys())[idx]
-        module = self.mathic_system.modules[module_id]
-        
-        substat_name = self.enhance_substat_var.get()
-        if not substat_name:
-            messagebox.showwarning("Warning", "Please select a substat to enhance")
-            return
-        
-        try:
-            roll_count = int(self.enhance_rolls_var.get())
-        except ValueError:
-            messagebox.showerror("Error", "Invalid roll count")
-            return
-        
-        # Check constraints
-        if module.total_enhancement_rolls + roll_count > module.max_total_rolls:
-            remaining = module.max_total_rolls - module.total_enhancement_rolls
-            messagebox.showwarning("Warning", f"Not enough rolls remaining. Only {remaining} rolls left.")
-            return
-        
-        target_substat = module.get_substat(substat_name)
-        if not target_substat:
-            messagebox.showerror("Error", "Substat not found")
-            return
-        
-        if target_substat.rolls_used + roll_count > target_substat.max_rolls:
-            remaining = target_substat.max_rolls - target_substat.rolls_used
-            messagebox.showwarning("Warning", f"Substat can only be enhanced {remaining} more times.")
-            return
-        
-        # Perform enhancement
-        success = self.mathic_system.enhance_module_specific_substat(module, substat_name, roll_count)
-        if success:
-            self.display_module_details(module)
-            self.refresh_module_list()
-            self.update_enhance_options()
-            self.enhance_info_label.config(text=f"Enhanced {substat_name} with {roll_count} roll(s)")
-            messagebox.showinfo("Success", f"Enhanced {substat_name} with {roll_count} roll(s)")
-        else:
-            messagebox.showerror("Error", "Enhancement failed")
+        """Legacy manual enhancement function - redirects to Enhance Simulator"""
+        messagebox.showinfo("Feature Moved", 
+                          "Manual enhancement has been moved to the Enhance Simulator tab.\n"
+                          "Please use Mathic System > Enhance Simulator for advanced enhancement features.")
     
     def update_enhance_options(self):
-        """Update enhancement options based on selected module"""
-        selection = self.module_listbox.curselection()
-        if not selection:
-            self.enhance_substat_combo.configure(values=[])
-            self.enhance_info_label.config(text="No module selected")
-            return
-        
-        idx = selection[0]
-        module_id = list(self.mathic_system.modules.keys())[idx]
-        module = self.mathic_system.modules[module_id]
-        
-        # Get enhanceable substats
-        enhanceable_substats = []
-        for substat in module.substats:
-            if substat.can_enhance() and module.can_be_enhanced():
-                enhanceable_substats.append(substat.stat_name)
-        
-        self.enhance_substat_combo.configure(values=enhanceable_substats)
-        
-        # Update info
-        remaining_rolls = module.max_total_rolls - module.total_enhancement_rolls
-        self.enhance_info_label.config(text=f"Remaining rolls: {remaining_rolls}/{module.max_total_rolls}")
-        
-        if enhanceable_substats and remaining_rolls > 0:
-            self.enhance_substat_var.set(enhanceable_substats[0])
-        else:
-            self.enhance_substat_var.set("")
+        """Update enhancement options based on selected module (legacy function - no longer needed)"""
+        # This function is kept for compatibility but no longer performs any operations
+        # since the enhancement UI has been moved to Enhance Simulator tab
+        pass
     
     def refresh_loadout_list(self):
         """Refresh the loadout list"""
