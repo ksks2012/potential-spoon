@@ -749,7 +749,7 @@ class CharacterPokedexUI:
         self.substat1_value_combo.grid(row=0, column=2, padx=(0, 5))
         self.substat1_rolls_var = tk.StringVar(value="0")
         self.substat1_spinbox = ttk.Spinbox(substat1_frame, textvariable=self.substat1_rolls_var,
-                                          from_=0, to=5, width=5, command=lambda: self.update_substat_value_options(1))
+                                          from_=0, to=5, width=5)
         self.substat1_spinbox.grid(row=0, column=3)
         
         # Substat 2
@@ -765,7 +765,7 @@ class CharacterPokedexUI:
         self.substat2_value_combo.grid(row=0, column=2, padx=(0, 5))
         self.substat2_rolls_var = tk.StringVar(value="0")
         self.substat2_spinbox = ttk.Spinbox(substat2_frame, textvariable=self.substat2_rolls_var,
-                                          from_=0, to=5, width=5, command=lambda: self.update_substat_value_options(2))
+                                          from_=0, to=5, width=5)
         self.substat2_spinbox.grid(row=0, column=3)
         
         # Substat 3
@@ -781,7 +781,7 @@ class CharacterPokedexUI:
         self.substat3_value_combo.grid(row=0, column=2, padx=(0, 5))
         self.substat3_rolls_var = tk.StringVar(value="0")
         self.substat3_spinbox = ttk.Spinbox(substat3_frame, textvariable=self.substat3_rolls_var,
-                                          from_=0, to=5, width=5, command=lambda: self.update_substat_value_options(3))
+                                          from_=0, to=5, width=5)
         self.substat3_spinbox.grid(row=0, column=3)
         
         # Substat 4
@@ -797,7 +797,7 @@ class CharacterPokedexUI:
         self.substat4_value_combo.grid(row=0, column=2, padx=(0, 5))
         self.substat4_rolls_var = tk.StringVar(value="0")
         self.substat4_spinbox = ttk.Spinbox(substat4_frame, textvariable=self.substat4_rolls_var,
-                                          from_=0, to=5, width=5, command=lambda: self.update_substat_value_options(4))
+                                          from_=0, to=5, width=5)
         self.substat4_spinbox.grid(row=0, column=3)
         
         # Apply changes button
@@ -822,6 +822,11 @@ class CharacterPokedexUI:
         # Initialize selection tracking
         self.current_selected_module_id = None
         self.current_selected_index = None
+        
+        # Initialize flag to prevent infinite loops during rolls adjustment
+        self.adjusting_rolls = False
+        self.pending_warning = None  # For batching warning messages
+        self.rolls_change_depth = 0  # Track reentrancy depth for additional protection
         
         # Initialize
         self.create_sample_modules()
@@ -1134,11 +1139,17 @@ class CharacterPokedexUI:
         for combo, _, _, _, _, _ in self.substat_controls:
             combo.configure(values=substat_options)
         
-        # Bind substat type change events to update value options
-        self.substat1_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(1))
-        self.substat2_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(2))
-        self.substat3_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(3))
-        self.substat4_combo.bind('<<ComboboxSelected>>', lambda e: self.update_substat_value_options(4))
+        # Bind substat type change events to update value options and total rolls
+        self.substat1_combo.bind('<<ComboboxSelected>>', lambda e: self.on_substat_type_change(1))
+        self.substat2_combo.bind('<<ComboboxSelected>>', lambda e: self.on_substat_type_change(2))
+        self.substat3_combo.bind('<<ComboboxSelected>>', lambda e: self.on_substat_type_change(3))
+        self.substat4_combo.bind('<<ComboboxSelected>>', lambda e: self.on_substat_type_change(4))
+        
+        # Bind substat type variable changes to update total rolls
+        self.substat1_type_var.trace('w', lambda *args: self.on_substat_type_change(1))
+        self.substat2_type_var.trace('w', lambda *args: self.on_substat_type_change(2))
+        self.substat3_type_var.trace('w', lambda *args: self.on_substat_type_change(3))
+        self.substat4_type_var.trace('w', lambda *args: self.on_substat_type_change(4))
         
         # Bind roll spinbox value changes to update value options and total rolls
         self.substat1_rolls_var.trace('w', lambda *args: self.on_substat_rolls_change(1))
@@ -1258,18 +1269,109 @@ class CharacterPokedexUI:
         else:
             value_combo.configure(values=[])
     
-    def on_substat_rolls_change(self, substat_index):
-        """Handle substat rolls change - update value options and total rolls"""
+    def on_substat_type_change(self, substat_index):
+        """Handle substat type change - update value options and total rolls"""
         self.update_substat_value_options(substat_index)
         self.update_total_rolls_display()
     
+    def on_substat_rolls_change(self, substat_index):
+        """Handle substat rolls change - update value options and validate total rolls"""
+        # Prevent infinite loops during adjustment or messagebox display
+        if getattr(self, 'adjusting_rolls', False):
+            return
+        
+        # Note: We don't block on pending_warning here because adjustment logic should still run
+        # Only the warning display is batched, not the actual value adjustment
+        
+        # Final protection: prevent excessive reentrancy depth
+        if getattr(self, 'rolls_change_depth', 0) > 0:
+            return
+        
+        # Set reentrancy counter
+        self.rolls_change_depth = getattr(self, 'rolls_change_depth', 0) + 1
+        
+        # Calculate what the new total would be
+        try:
+            new_total = 0
+            for _, _, _, type_var, _, rolls_var in self.substat_controls:
+                # Only count rolls if substat type is set (not empty)
+                stat_name = type_var.get()
+                if stat_name and stat_name != "":
+                    rolls = int(rolls_var.get()) if rolls_var.get() else 0
+                    new_total += rolls
+            
+            # Check if total rolls would exceed 5
+            if new_total > 5:
+                # Set flag to prevent infinite loops
+                self.adjusting_rolls = True
+                max_allowed = 0  # Default value
+                
+                try:
+                    # Reset the current substat's rolls to bring total back to 5 or under
+                    idx = substat_index - 1
+                    current_rolls_var = self.substat_controls[idx][5]  # rolls_var is at index 5
+                    current_rolls = int(current_rolls_var.get()) if current_rolls_var.get() else 0
+                    
+                    # Calculate maximum allowed rolls for this substat
+                    other_total = new_total - current_rolls
+                    max_allowed = 5 - other_total
+                    
+                    if max_allowed < 0:
+                        max_allowed = 0
+                    
+                    # Set the rolls to maximum allowed value
+                    current_rolls_var.set(str(max_allowed))
+                    
+                except ValueError:
+                    pass
+                finally:
+                    # Always clear the flag first
+                    self.adjusting_rolls = False
+                
+                # Schedule warning message to avoid multiple rapid messageboxes
+                self.schedule_warning_message(substat_index, max_allowed)
+        
+        except ValueError:
+            pass  # Ignore invalid values
+        finally:
+            # Always reset reentrancy counter
+            self.rolls_change_depth = max(0, getattr(self, 'rolls_change_depth', 1) - 1)
+        
+        # Update value options and total display
+        self.update_substat_value_options(substat_index)
+        self.update_total_rolls_display()
+    
+    def schedule_warning_message(self, substat_index, adjusted_value):
+        """Schedule a warning message, batching multiple rapid adjustments"""
+        # Cancel any existing pending warning
+        if self.pending_warning:
+            self.root.after_cancel(self.pending_warning)
+        
+        # Schedule new warning with a small delay to batch rapid changes
+        def show_warning():
+            # Additional protection: Set flag before showing messagebox
+            self.adjusting_rolls = True
+            try:
+                messagebox.showwarning("Rolls Limit", 
+                                     f"Total rolls cannot exceed 5.\n"
+                                     f"Values have been automatically adjusted.")
+            finally:
+                # Always clear flag after messagebox, even if exception occurs
+                self.adjusting_rolls = False
+                self.pending_warning = None
+        
+        self.pending_warning = self.root.after(100, show_warning)  # 100ms delay
+    
     def update_total_rolls_display(self):
-        """Update total rolls display based on individual substat rolls"""
+        """Update total rolls display based on individual substat rolls (only count non-empty substats)"""
         try:
             total = 0
-            for _, _, _, _, _, rolls_var in self.substat_controls:
-                rolls = int(rolls_var.get()) if rolls_var.get() else 0
-                total += rolls
+            for _, _, _, type_var, _, rolls_var in self.substat_controls:
+                # Only count rolls if substat type is set (not empty)
+                stat_name = type_var.get()
+                if stat_name and stat_name != "":
+                    rolls = int(rolls_var.get()) if rolls_var.get() else 0
+                    total += rolls
             self.total_rolls_var.set(str(total))
         except ValueError:
             self.total_rolls_var.set("0")
