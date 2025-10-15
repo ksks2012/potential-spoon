@@ -37,3 +37,4 @@ pkg/**
 bak/**
 
 **/summary/**
+**/test_env/**
