@@ -12,6 +12,60 @@ class MatrixEffectsParser:
         self.soup = None
         self.matrix_effects = []
     
+    def parse_effect_text(self, effect_text):
+        """Parse effect text to extract stat bonuses and extra effects"""
+        effect_data = {
+            'effect': {},
+            'extra_effect': ''
+        }
+        
+        # Common stat patterns
+        stat_patterns = [
+            (r'ATK\s*\+(\d+)%', 'ATK'),
+            (r'DEF\s*\+(\d+)%', 'DEF'),
+            (r'HP\s*\+(\d+)%', 'HP'),
+            (r'SPD\s*\+(\d+)%', 'SPD'),
+            (r'CRIT Rate\s*\+(\d+)%', 'CRIT Rate'),
+            (r'CRIT DMG\s*\+(\d+)%', 'CRIT DMG'),
+            (r'Effect RES\s*\+(\d+)%', 'Effect RES'),
+            (r'Effect ACC\s*\+(\d+)%', 'Effect ACC'),
+            (r'Healing Effect\s*(?:increases by\s*)?(\d+)%', 'Healing Effect')
+        ]
+        
+        # Extract stat bonuses
+        remaining_text = effect_text
+        for pattern, stat_name in stat_patterns:
+            matches = re.findall(pattern, remaining_text, re.IGNORECASE)
+            if matches:
+                # Take the first match and convert to int
+                effect_data['effect'][stat_name] = f"{matches[0]}%"
+                # Remove the matched text from remaining text
+                remaining_text = re.sub(pattern, '', remaining_text, flags=re.IGNORECASE)
+        
+        # Handle combined stats with &
+        # Example: "DEF +25% & Effect RES +20%"
+        if '&' in effect_text:
+            parts = effect_text.split('&')
+            for part in parts:
+                part = part.strip()
+                for pattern, stat_name in stat_patterns:
+                    match = re.search(pattern, part, re.IGNORECASE)
+                    if match:
+                        effect_data['effect'][stat_name] = f"{match.group(1)}%"
+        
+        # Clean up remaining text for extra effects
+        # Remove multiple spaces, leading/trailing dots and spaces
+        remaining_text = re.sub(r'\s*&\s*', ' ', remaining_text)
+        remaining_text = re.sub(r'^\.\s*', '', remaining_text)
+        remaining_text = re.sub(r'\s+', ' ', remaining_text).strip()
+        remaining_text = remaining_text.strip(' .')
+        
+        # If there's meaningful text left, it's an extra effect
+        if remaining_text and len(remaining_text) > 10:  # Avoid very short meaningless text
+            effect_data['extra_effect'] = remaining_text
+        
+        return effect_data
+    
     def load_html(self):
         """Load the HTML file"""
         try:
@@ -88,11 +142,20 @@ class MatrixEffectsParser:
                             effect_desc = re.sub(r'&nbsp;', ' ', effect_desc)
                             effect_desc = re.sub(r'\s+', ' ', effect_desc).strip()
                             
-                            effects.append({
+                            # Parse the effect using the new parsing function
+                            parsed_effect = self.parse_effect_text(effect_desc)
+                            
+                            effect_entry = {
                                 'required': int(required_count),
                                 'total': int(total_count),
-                                'effect': effect_desc
-                            })
+                                'effect': parsed_effect['effect']
+                            }
+                            
+                            # Only add extra_effect if it exists and is not empty
+                            if parsed_effect['extra_effect']:
+                                effect_entry['extra_effect'] = parsed_effect['extra_effect']
+                            
+                            effects.append(effect_entry)
                     
                     matrix_data['effects'] = effects
                 
@@ -129,7 +192,17 @@ class MatrixEffectsParser:
             
             effects = matrix.get('effects', [])
             for effect in effects:
-                print(f"   {effect['required']}/{effect['total']}: {effect['effect']}")
+                # Display stat bonuses
+                stat_parts = []
+                for stat, value in effect['effect'].items():
+                    stat_parts.append(f"{stat} +{value}")
+                stats_str = ', '.join(stat_parts) if stat_parts else 'No stat bonuses'
+                
+                print(f"   {effect['required']}/{effect['total']}: {stats_str}")
+                
+                # Display extra effect if present
+                if 'extra_effect' in effect:
+                    print(f"      Extra: {effect['extra_effect']}")
     
     def parse(self):
         """Main parsing function"""
@@ -175,7 +248,10 @@ def main():
             print(f"- Type: {' / '.join(type_list)}")
             print(f"- Source: {matrix.get('source')}")
             for effect in matrix.get('effects', []):
-                print(f"- {effect['required']}/{effect['total']}: {effect['effect']}")
+                print(f"- {effect['required']}/{effect['total']}:")
+                print(f"    effect: {effect['effect']}")
+                if 'extra_effect' in effect:
+                    print(f"    extra_effect: {effect['extra_effect']}")
 
 
 if __name__ == "__main__":
