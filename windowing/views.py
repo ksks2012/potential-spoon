@@ -718,6 +718,411 @@ class ModuleEditorView(BaseView):
         }
 
 
+class EnhanceSimulatorView(BaseView):
+    """View for enhance simulator"""
+    
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.enhance_module_var = tk.StringVar()
+        
+        # UI elements
+        self.enhance_module_combo = None
+        self.current_module_text = None
+        self.enhancement_log = None
+        self.probability_tree = None
+        self.value_analysis_text = None
+        
+    def create_widgets(self):
+        """Create enhance simulator widgets"""
+        # Configure grid weights
+        self.parent.columnconfigure(0, weight=1)
+        self.parent.columnconfigure(1, weight=1)
+        self.parent.rowconfigure(1, weight=1)
+        
+        # Top frame - Module selection
+        top_frame = ttk.Frame(self.parent)
+        top_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        ttk.Label(top_frame, text="Select Module for Enhancement:").grid(row=0, column=0, padx=(0, 10))
+        self.enhance_module_combo = ttk.Combobox(top_frame, textvariable=self.enhance_module_var,
+                                               state="readonly", width=30)
+        self.enhance_module_combo.grid(row=0, column=1, padx=(0, 10))
+        self.enhance_module_combo.bind('<<ComboboxSelected>>', 
+                                     lambda e: self.controller.on_enhance_module_select() if self.controller else None)
+        
+        ttk.Button(top_frame, text="Refresh Modules", 
+                  command=lambda: self.controller.refresh_enhance_modules() if self.controller else None).grid(row=0, column=2)
+        
+        # Left panel - Enhancement controls
+        self._create_enhancement_controls()
+        
+        # Right panel - Statistics and analysis
+        self._create_statistics_panel()
+        
+        return self.parent
+    
+    def _create_enhancement_controls(self):
+        """Create enhancement controls panel"""
+        left_panel = ttk.LabelFrame(self.parent, text="Enhancement Controls", padding="10")
+        left_panel.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 5))
+        
+        # Current module info
+        current_info_frame = ttk.LabelFrame(left_panel, text="Current Module", padding="10")
+        current_info_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        self.current_module_text = tk.Text(current_info_frame, height=8, wrap=tk.WORD, state=tk.DISABLED)
+        self.current_module_text.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        
+        # Enhancement buttons
+        enhance_buttons_frame = ttk.Frame(left_panel)
+        enhance_buttons_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        
+        ttk.Button(enhance_buttons_frame, text="Enhance Once", 
+                  command=lambda: self.controller.enhance_once() if self.controller else None).grid(row=0, column=0, padx=(0, 10))
+        ttk.Button(enhance_buttons_frame, text="Enhance 5 Times", 
+                  command=lambda: self.controller.enhance_five_times() if self.controller else None).grid(row=0, column=1, padx=(0, 10))
+        ttk.Button(enhance_buttons_frame, text="Enhance to Max", 
+                  command=lambda: self.controller.enhance_to_max() if self.controller else None).grid(row=0, column=2)
+        
+        # Enhancement log
+        log_frame = ttk.LabelFrame(left_panel, text="Enhancement Log", padding="10")
+        log_frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
+        
+        self.enhancement_log = tk.Text(log_frame, height=10, wrap=tk.WORD, state=tk.DISABLED)
+        self.enhancement_log.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        log_scroll = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.enhancement_log.yview)
+        log_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.enhancement_log.configure(yscrollcommand=log_scroll.set)
+        
+        # Configure grid weights
+        left_panel.columnconfigure(0, weight=1)
+        left_panel.rowconfigure(2, weight=1)
+        current_info_frame.columnconfigure(0, weight=1)
+        log_frame.columnconfigure(0, weight=1)
+        log_frame.rowconfigure(0, weight=1)
+    
+    def _create_statistics_panel(self):
+        """Create statistics and analysis panel"""
+        right_panel = ttk.LabelFrame(self.parent, text="Statistics & Analysis", padding="10")
+        right_panel.grid(row=1, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(5, 0))
+        
+        # Substat probabilities
+        prob_frame = ttk.LabelFrame(right_panel, text="Enhancement Probabilities", padding="10")
+        prob_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        
+        self.probability_tree = ttk.Treeview(prob_frame, columns=('Probability',), show='tree headings', height=8)
+        self.probability_tree.heading('#0', text='Substat')
+        self.probability_tree.heading('Probability', text='Probability (%)')
+        self.probability_tree.column('#0', width=150)
+        self.probability_tree.column('Probability', width=100)
+        self.probability_tree.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        
+        prob_scroll = ttk.Scrollbar(prob_frame, orient=tk.VERTICAL, command=self.probability_tree.yview)
+        prob_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.probability_tree.configure(yscrollcommand=prob_scroll.set)
+        
+        # Module value analysis
+        value_frame = ttk.LabelFrame(right_panel, text="Module Value Analysis", padding="10")
+        value_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
+        
+        self.value_analysis_text = tk.Text(value_frame, height=12, wrap=tk.WORD, state=tk.DISABLED)
+        self.value_analysis_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        value_scroll = ttk.Scrollbar(value_frame, orient=tk.VERTICAL, command=self.value_analysis_text.yview)
+        value_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.value_analysis_text.configure(yscrollcommand=value_scroll.set)
+        
+        # Configure grid weights
+        right_panel.columnconfigure(0, weight=1)
+        right_panel.rowconfigure(1, weight=1)
+        prob_frame.columnconfigure(0, weight=1)
+        value_frame.columnconfigure(0, weight=1)
+        value_frame.rowconfigure(0, weight=1)
+    
+    def update_display(self, data):
+        """Update module list for enhance simulator"""
+        module_options = []
+        for module_id, module in data.items():
+            display_text = f"{module_id}: {module.module_type} - {module.main_stat}"
+            module_options.append(display_text)
+        
+        self.enhance_module_combo.configure(values=module_options)
+        if module_options and not self.enhance_module_var.get():
+            self.enhance_module_var.set(module_options[0])
+            if self.controller:
+                self.controller.on_enhance_module_select()
+    
+    def update_current_module_display(self, module, config):
+        """Update current module information display"""
+        self.current_module_text.config(state=tk.NORMAL)
+        self.current_module_text.delete(1.0, tk.END)
+        
+        info_text = f"Module: {module.module_type}\n"
+        info_text += f"Main Stat: {module.main_stat} ({int(module.main_stat_value)})\n"
+        info_text += f"Level: {module.level} (Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})\n"
+        info_text += f"Substats: {len(module.substats)}/4\n\n"
+        
+        if module.substats:
+            info_text += "Current Substats:\n"
+            for i, substat in enumerate(module.substats, 1):
+                max_val = config["substats"][substat.stat_name]["max_value"]
+                efficiency = substat.get_efficiency_percentage(max_val)
+                info_text += f"{i}. {substat.stat_name}: {int(substat.current_value)} "
+                info_text += f"({substat.rolls_used}/{substat.max_rolls} rolls, {efficiency:.1f}%)\n"
+        else:
+            info_text += "No substats yet\n"
+        
+        self.current_module_text.insert(1.0, info_text)
+        self.current_module_text.config(state=tk.DISABLED)
+    
+    def update_probability_display(self, probabilities):
+        """Update probability display for next enhancement"""
+        # Clear existing items
+        for item in self.probability_tree.get_children():
+            self.probability_tree.delete(item)
+        
+        if probabilities:
+            for stat_name, prob in probabilities.items():
+                self.probability_tree.insert('', tk.END, text=stat_name, 
+                                            values=(f"{prob*100:.1f}%",))
+        else:
+            self.probability_tree.insert('', tk.END, text="No enhancements possible", 
+                                        values=("0.0%",))
+    
+    def update_value_analysis_display(self, value_data):
+        """Update module value analysis display"""
+        self.value_analysis_text.config(state=tk.NORMAL)
+        self.value_analysis_text.delete(1.0, tk.END)
+        
+        analysis_text = "MODULE VALUE ANALYSIS\n"
+        analysis_text += "="*30 + "\n\n"
+        
+        analysis_text += f"Total Value Score: {value_data['total_value']:.2f}\n"
+        analysis_text += f"Overall Efficiency: {value_data['efficiency']:.1f}%\n"
+        analysis_text += f"Roll Efficiency: {value_data['roll_efficiency']:.1f}%\n\n"
+        
+        if value_data.get('details'):
+            analysis_text += "Substat Breakdown:\n"
+            analysis_text += "-" * 20 + "\n"
+            
+            for stat_name, details in value_data['details'].items():
+                analysis_text += f"{stat_name}:\n"
+                analysis_text += f"  Value: {int(details['current_value'])}\n"
+                analysis_text += f"  Efficiency: {details['efficiency']:.1f}%\n"
+                analysis_text += f"  Rolls: {details['rolls_used']}/5\n"
+                analysis_text += f"  Score: {details['substat_value']:.2f}\n"
+                analysis_text += f"  Importance: {details['importance']:.1f}\n\n"
+        
+        self.value_analysis_text.insert(1.0, analysis_text)
+        self.value_analysis_text.config(state=tk.DISABLED)
+    
+    def log_enhancement(self, message):
+        """Add message to enhancement log"""
+        self.enhancement_log.config(state=tk.NORMAL)
+        self.enhancement_log.insert(tk.END, message + "\n")
+        self.enhancement_log.config(state=tk.DISABLED)
+        self.enhancement_log.see(tk.END)
+    
+    def get_selected_module_id(self):
+        """Get currently selected module ID"""
+        selection = self.enhance_module_var.get()
+        if selection:
+            return selection.split(":")[0]
+        return None
+
+
+class LoadoutManagerView(BaseView):
+    """View for loadout manager"""
+    
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.loadout_var = tk.StringVar()
+        
+        # UI elements
+        self.loadout_combo = None
+        self.slot_frames = {}
+        self.slot_combos = {}
+        self.slot_vars = {}
+        self.slot_substats_labels = {}
+        self.stats_summary_text = None
+        
+    def create_widgets(self):
+        """Create loadout manager widgets"""
+        # Configure grid weights
+        self.parent.columnconfigure(0, weight=2)  # Left side for slots
+        self.parent.columnconfigure(1, weight=1)  # Right side for stats
+        self.parent.rowconfigure(1, weight=1)
+        
+        # Top frame - Loadout selection
+        self._create_loadout_selection()
+        
+        # Loadout slots frame (left side)
+        self._create_equipment_slots()
+        
+        # Stats summary frame (right side)
+        self._create_stats_summary()
+        
+        return self.parent
+    
+    def _create_loadout_selection(self):
+        """Create loadout selection controls"""
+        top_frame = ttk.Frame(self.parent)
+        top_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=10, pady=(10, 5))
+        
+        ttk.Label(top_frame, text="Loadout:").grid(row=0, column=0, padx=(0, 5))
+        self.loadout_combo = ttk.Combobox(top_frame, textvariable=self.loadout_var,
+                                        state="readonly", width=20)
+        self.loadout_combo.grid(row=0, column=1, padx=(0, 10))
+        self.loadout_combo.bind('<<ComboboxSelected>>', 
+                               lambda e: self.controller.on_loadout_select() if self.controller else None)
+        
+        ttk.Button(top_frame, text="New Loadout", 
+                  command=lambda: self.controller.new_loadout() if self.controller else None).grid(row=0, column=2, padx=(0, 5))
+        ttk.Button(top_frame, text="Delete Loadout", 
+                  command=lambda: self.controller.delete_loadout() if self.controller else None).grid(row=0, column=3)
+    
+    def _create_equipment_slots(self):
+        """Create equipment slots display"""
+        slots_frame = ttk.LabelFrame(self.parent, text="Equipment Slots", padding="10")
+        slots_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(10, 5), pady=5)
+        
+        # Create 6 slots in 2x3 layout
+        slot_positions = [
+            (0, 0), (1, 0), (2, 0),  # Column 1: slots 1, 2, 3
+            (0, 1), (1, 1), (2, 1)   # Column 2: slots 4, 5, 6
+        ]
+        
+        for i in range(6):
+            slot_id = i + 1
+            row, col = slot_positions[i]
+            
+            slot_frame = ttk.LabelFrame(slots_frame, text=f"Slot {slot_id}", padding="10")
+            slot_frame.grid(row=row, column=col, sticky=(tk.W, tk.E, tk.N, tk.S), 
+                          padx=5, pady=5)
+            
+            self.slot_frames[slot_id] = slot_frame
+            
+            # Module selection
+            self.slot_vars[slot_id] = tk.StringVar()
+            self.slot_combos[slot_id] = ttk.Combobox(slot_frame, 
+                                                   textvariable=self.slot_vars[slot_id],
+                                                   state="readonly", width=15)
+            self.slot_combos[slot_id].grid(row=0, column=0, pady=(0, 5))
+            self.slot_combos[slot_id].bind('<<ComboboxSelected>>', 
+                                         lambda e, s=slot_id: self.controller.on_slot_module_change(s) if self.controller else None)
+            
+            # Substats display area
+            substats_frame = ttk.Frame(slot_frame)
+            substats_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+            
+            # Create 4 labels for substats in vertical layout
+            self.slot_substats_labels[slot_id] = []
+            for j in range(4):
+                substat_label = ttk.Label(substats_frame, text="", font=("Arial", 10), foreground="darkblue")
+                substat_label.grid(row=j, column=0, sticky=tk.W, pady=1)
+                self.slot_substats_labels[slot_id].append(substat_label)
+        
+        # Configure grid weights for 2x3 layout
+        slots_frame.columnconfigure(0, weight=1)
+        slots_frame.columnconfigure(1, weight=1)
+        slots_frame.rowconfigure(0, weight=1)
+        slots_frame.rowconfigure(1, weight=1)
+        slots_frame.rowconfigure(2, weight=1)
+    
+    def _create_stats_summary(self):
+        """Create stats summary display"""
+        stats_frame = ttk.LabelFrame(self.parent, text="Total Stats", padding="10")
+        stats_frame.grid(row=1, column=1, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(5, 10), pady=5)
+        
+        self.stats_summary_text = tk.Text(stats_frame, height=15, wrap=tk.WORD, state=tk.DISABLED)
+        self.stats_summary_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Configure grid weights
+        stats_frame.columnconfigure(0, weight=1)
+        stats_frame.rowconfigure(0, weight=1)
+    
+    def update_display(self, data):
+        """Update loadout list"""
+        loadouts = list(data.keys())
+        self.loadout_combo.configure(values=loadouts)
+        if loadouts and not self.loadout_var.get():
+            self.loadout_var.set(loadouts[0])
+            if self.controller:
+                self.controller.on_loadout_select()
+    
+    def update_slot_module_options(self, slot_restrictions, modules):
+        """Update module options for all slots with type restrictions"""
+        for slot_id in range(1, 7):
+            allowed_types = slot_restrictions.get(slot_id, [])
+            
+            # Filter modules by allowed types for this slot
+            slot_module_options = ["None"]
+            for mid, mod in modules.items():
+                if mod.module_type in allowed_types:
+                    slot_module_options.append(f"{mid}: {mod.module_type} - {mod.main_stat}")
+            
+            self.slot_combos[slot_id].configure(values=slot_module_options)
+    
+    def update_loadout_display(self, loadout, modules):
+        """Update loadout slots display"""
+        for slot_id in range(1, 7):
+            module_id = loadout.get(slot_id)
+            if module_id and module_id in modules:
+                module = modules[module_id]
+                self.slot_vars[slot_id].set(f"{module_id}: {module.module_type} - {module.main_stat}")
+                
+                # Update substats display
+                for i, substat_label in enumerate(self.slot_substats_labels[slot_id]):
+                    if i < len(module.substats):
+                        substat = module.substats[i]
+                        text = f"{substat.stat_name}: +{int(substat.current_value)}"
+                        substat_label.config(text=text)
+                    else:
+                        substat_label.config(text="")
+            else:
+                self.slot_vars[slot_id].set("None")
+                # Clear substats display
+                for substat_label in self.slot_substats_labels[slot_id]:
+                    substat_label.config(text="")
+    
+    def update_stats_summary(self, total_stats):
+        """Update total stats display"""
+        self.stats_summary_text.config(state=tk.NORMAL)
+        self.stats_summary_text.delete(1.0, tk.END)
+        
+        if total_stats:
+            stats_text = "Total Stats:\n" + "="*30 + "\n"
+            
+            # Separate flat and percentage stats
+            flat_stats = ["ATK", "HP", "DEF"]
+            percent_stats = ["ATK%", "HP%", "DEF%", "CRIT Rate", "CRIT DMG", 
+                           "Effect ACC", "Effect RES", "SPD"]
+            
+            stats_text += "\nFlat Stats:\n"
+            for stat in flat_stats:
+                if stat in total_stats:
+                    stats_text += f"  {stat}: +{int(total_stats[stat])}\n"
+            
+            stats_text += "\nPercentage Stats:\n"
+            for stat in percent_stats:
+                if stat in total_stats:
+                    stats_text += f"  {stat}: +{total_stats[stat]:.1f}%\n"
+        else:
+            stats_text = "No modules equipped"
+        
+        self.stats_summary_text.insert(1.0, stats_text)
+        self.stats_summary_text.config(state=tk.DISABLED)
+    
+    def get_selected_loadout(self):
+        """Get currently selected loadout name"""
+        return self.loadout_var.get()
+    
+    def get_slot_selection(self, slot_id):
+        """Get module selection for specific slot"""
+        return self.slot_vars[slot_id].get()
+
+
 class MainView:
     """Main application view that contains all sub-views"""
     
@@ -733,6 +1138,8 @@ class MainView:
         # Sub-views
         self.character_view = None
         self.module_editor_view = None
+        self.enhance_simulator_view = None
+        self.loadout_manager_view = None
         
     def create_widgets(self):
         """Create main window widgets"""
@@ -786,14 +1193,17 @@ class MainView:
         self.module_editor_view = ModuleEditorView(module_frame)
         self.module_editor_view.create_widgets()
         
-        # Placeholder for other tabs
+        # Enhance Simulator tab
         enhance_frame = ttk.Frame(mathic_notebook, padding="10")
         mathic_notebook.add(enhance_frame, text="Enhance Simulator")
-        ttk.Label(enhance_frame, text="Enhance Simulator - Coming Soon").pack(pady=20)
+        self.enhance_simulator_view = EnhanceSimulatorView(enhance_frame)
+        self.enhance_simulator_view.create_widgets()
         
+        # Loadout Manager tab
         loadout_frame = ttk.Frame(mathic_notebook, padding="10")
         mathic_notebook.add(loadout_frame, text="Loadout Manager")
-        ttk.Label(loadout_frame, text="Loadout Manager - Coming Soon").pack(pady=20)
+        self.loadout_manager_view = LoadoutManagerView(loadout_frame)
+        self.loadout_manager_view.create_widgets()
         
         overview_frame = ttk.Frame(mathic_notebook, padding="10")
         mathic_notebook.add(overview_frame, text="System Overview")
@@ -830,3 +1240,11 @@ class MainView:
     def get_module_editor_view(self):
         """Get module editor view"""
         return self.module_editor_view
+    
+    def get_enhance_simulator_view(self):
+        """Get enhance simulator view"""
+        return self.enhance_simulator_view
+    
+    def get_loadout_manager_view(self):
+        """Get loadout manager view"""
+        return self.loadout_manager_view

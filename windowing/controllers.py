@@ -470,6 +470,287 @@ class ModuleEditorController(BaseController):
                               f"Current rolls: {module.total_enhancement_rolls}/{module.max_total_rolls}")
 
 
+class EnhanceSimulatorController(BaseController):
+    """Controller for enhance simulator"""
+    
+    def __init__(self, model, view, app_state):
+        super().__init__(model, view)
+        self.app_state = app_state
+    
+    def initialize(self):
+        """Initialize enhance simulator controller"""
+        self.refresh_enhance_modules()
+    
+    def refresh_enhance_modules(self):
+        """Refresh the module list for enhance simulator"""
+        try:
+            modules = self.model.get_all_modules()
+            self.view.update_display(modules)
+            self.app_state.set_status(f"Loaded {len(modules)} modules for enhancement")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh modules: {e}")
+    
+    def on_enhance_module_select(self):
+        """Handle module selection in enhance simulator"""
+        module_id = self.view.get_selected_module_id()
+        if not module_id:
+            return
+        
+        try:
+            module = self.model.get_module_by_id(module_id)
+            if module:
+                # Update current module display
+                self.view.update_current_module_display(module, self.model.mathic_system.config)
+                
+                # Update probability display
+                probabilities = self.model.calculate_substat_probabilities(module_id)
+                self.view.update_probability_display(probabilities)
+                
+                # Update value analysis display
+                value_data = self.model.calculate_module_value(module_id)
+                self.view.update_value_analysis_display(value_data)
+                
+                self.app_state.set_status(f"Selected module {module_id} for enhancement")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load module details: {e}")
+    
+    def enhance_once(self):
+        """Enhance the selected module once"""
+        self._perform_enhancement(1)
+    
+    def enhance_five_times(self):
+        """Enhance the selected module 5 times"""
+        self._perform_enhancement(5)
+    
+    def enhance_to_max(self):
+        """Enhance the selected module to maximum"""
+        module_id = self.view.get_selected_module_id()
+        if not module_id:
+            messagebox.showwarning("Warning", "Please select a module")
+            return
+        
+        module = self.model.get_module_by_id(module_id)
+        if module:
+            remaining_rolls = module.max_total_rolls - module.total_enhancement_rolls
+            if remaining_rolls > 0:
+                self._perform_enhancement(remaining_rolls)
+            else:
+                messagebox.showinfo("Info", "Module is already at maximum enhancement")
+    
+    def _perform_enhancement(self, times):
+        """Perform enhancement multiple times and log results"""
+        module_id = self.view.get_selected_module_id()
+        if not module_id:
+            messagebox.showwarning("Warning", "Please select a module")
+            return
+        
+        module = self.model.get_module_by_id(module_id)
+        if not module:
+            messagebox.showerror("Error", "Module not found")
+            return
+        
+        # Check if enhancement is possible
+        if not module.can_be_enhanced():
+            messagebox.showinfo("Info", "Module cannot be enhanced further")
+            return
+        
+        # Log enhancement start
+        self.view.log_enhancement(f"\n--- Starting {times} enhancement(s) for {module.module_type} ---")
+        
+        success_count = 0
+        for i in range(times):
+            if not module.can_be_enhanced():
+                self.view.log_enhancement(f"Enhancement {i+1}: Module fully enhanced")
+                break
+            
+            enhanced_stat = self.model.enhance_module_random(module_id)
+            if enhanced_stat:
+                success_count += 1
+                if enhanced_stat.startswith("New substat:"):
+                    self.view.log_enhancement(f"Enhancement {i+1}: {enhanced_stat}")
+                else:
+                    # Get the updated substat for logging
+                    updated_module = self.model.get_module_by_id(module_id)
+                    substat = None
+                    for s in updated_module.substats:
+                        if s.stat_name == enhanced_stat:
+                            substat = s
+                            break
+                    
+                    if substat:
+                        self.view.log_enhancement(
+                            f"Enhancement {i+1}: Enhanced {enhanced_stat} "
+                            f"(Current: {int(substat.current_value)}, "
+                            f"Rolls: {substat.rolls_used}/5)")
+            else:
+                self.view.log_enhancement(f"Enhancement {i+1}: Failed")
+                break
+        
+        self.view.log_enhancement(f"Completed {success_count}/{times} enhancements")
+        updated_module = self.model.get_module_by_id(module_id)
+        self.view.log_enhancement(f"Module level: {updated_module.level} "
+                                 f"(Rolls: {updated_module.total_enhancement_rolls}/{updated_module.max_total_rolls})")
+        
+        # Refresh displays
+        self.on_enhance_module_select()
+        self.app_state.set_status(f"Enhanced module {times} times, {success_count} successful")
+
+
+class LoadoutManagerController(BaseController):
+    """Controller for loadout manager"""
+    
+    def __init__(self, model, view, app_state):
+        super().__init__(model, view)
+        self.app_state = app_state
+        
+        # Slot type restrictions
+        self.slot_restrictions = {
+            1: ["mask"],
+            2: ["transistor"], 
+            3: ["wristwheel"],
+            4: ["core"],
+            5: ["core"],
+            6: ["core"]
+        }
+    
+    def initialize(self):
+        """Initialize loadout manager controller"""
+        self.refresh_loadout_list()
+        self.refresh_slot_module_options()
+    
+    def refresh_loadout_list(self):
+        """Refresh the loadout list"""
+        try:
+            loadouts = self.model.get_all_loadouts()
+            self.view.update_display(loadouts)
+            self.app_state.set_status(f"Loaded {len(loadouts)} loadouts")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh loadouts: {e}")
+    
+    def refresh_slot_module_options(self):
+        """Refresh module options for all slots with type restrictions"""
+        try:
+            modules = self.model.get_all_modules()
+            self.view.update_slot_module_options(self.slot_restrictions, modules)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh slot options: {e}")
+    
+    def on_loadout_select(self):
+        """Handle loadout selection"""
+        loadout_name = self.view.get_selected_loadout()
+        if not loadout_name:
+            return
+        
+        try:
+            loadout_modules = self.model.get_loadout_modules(loadout_name)
+            modules = self.model.get_all_modules()
+            
+            # Update loadout display
+            loadout = self.model.mathic_system.mathic_loadouts.get(loadout_name, {})
+            self.view.update_loadout_display(loadout, modules)
+            
+            # Update stats summary
+            self._update_loadout_stats(loadout_name)
+            
+            self.app_state.set_status(f"Selected loadout: {loadout_name}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load loadout: {e}")
+    
+    def on_slot_module_change(self, slot_id):
+        """Handle slot module assignment"""
+        loadout_name = self.view.get_selected_loadout()
+        if not loadout_name:
+            return
+        
+        selection = self.view.get_slot_selection(slot_id)
+        
+        try:
+            if selection == "None":
+                # Clear slot
+                self.model.assign_module_to_loadout(loadout_name, slot_id, None)
+                
+                # Clear substats display
+                for substat_label in self.view.slot_substats_labels[slot_id]:
+                    substat_label.config(text="")
+            else:
+                # Assign module
+                module_id = selection.split(":")[0]
+                self.model.assign_module_to_loadout(loadout_name, slot_id, module_id)
+                
+                # Update substats display
+                module = self.model.get_module_by_id(module_id)
+                if module:
+                    for i, substat_label in enumerate(self.view.slot_substats_labels[slot_id]):
+                        if i < len(module.substats):
+                            substat = module.substats[i]
+                            text = f"{substat.stat_name}: +{int(substat.current_value)}"
+                            substat_label.config(text=text)
+                        else:
+                            substat_label.config(text="")
+            
+            # Update stats summary
+            self._update_loadout_stats(loadout_name)
+            self.app_state.set_status(f"Updated slot {slot_id} in {loadout_name}")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update slot: {e}")
+    
+    def new_loadout(self):
+        """Create a new loadout"""
+        from tkinter.simpledialog import askstring
+        name = askstring("New Loadout", "Enter loadout name:")
+        if name:
+            if self.model.create_loadout(name):
+                self.refresh_loadout_list()
+                self.view.loadout_var.set(name)
+                self.on_loadout_select()
+                self.app_state.set_status(f"Created new loadout: {name}")
+            else:
+                messagebox.showwarning("Warning", "Loadout name already exists")
+    
+    def delete_loadout(self):
+        """Delete selected loadout"""
+        loadout_name = self.view.get_selected_loadout()
+        if not loadout_name:
+            return
+        
+        if messagebox.askyesno("Confirm", f"Delete loadout '{loadout_name}'?"):
+            if self.model.delete_loadout(loadout_name):
+                self.refresh_loadout_list()
+                self.app_state.set_status(f"Deleted loadout: {loadout_name}")
+            else:
+                messagebox.showerror("Error", "Failed to delete loadout")
+    
+    def _update_loadout_stats(self, loadout_name):
+        """Update loadout total stats display"""
+        try:
+            loadout_modules = self.model.get_loadout_modules(loadout_name)
+            total_stats = {}
+            
+            # Calculate total stats
+            for slot_id, module in loadout_modules.items():
+                if module:
+                    # Add main stat
+                    if module.main_stat in total_stats:
+                        total_stats[module.main_stat] += module.main_stat_value
+                    else:
+                        total_stats[module.main_stat] = module.main_stat_value
+                    
+                    # Add substats
+                    for substat in module.substats:
+                        if substat.stat_name:
+                            if substat.stat_name in total_stats:
+                                total_stats[substat.stat_name] += substat.current_value
+                            else:
+                                total_stats[substat.stat_name] = substat.current_value
+            
+            # Update display
+            self.view.update_stats_summary(total_stats)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to calculate stats: {e}")
+
+
 class ApplicationController:
     """Main application controller that coordinates all sub-controllers"""
     
@@ -491,6 +772,18 @@ class ApplicationController:
             app_state
         )
         
+        self.enhance_simulator_controller = EnhanceSimulatorController(
+            models['mathic'], 
+            views.get_enhance_simulator_view(), 
+            app_state
+        )
+        
+        self.loadout_manager_controller = LoadoutManagerController(
+            models['mathic'], 
+            views.get_loadout_manager_view(), 
+            app_state
+        )
+        
         # Bind action buttons
         self._bind_character_actions()
     
@@ -498,6 +791,8 @@ class ApplicationController:
         """Initialize all controllers"""
         self.character_controller.initialize()
         self.module_editor_controller.initialize()
+        self.enhance_simulator_controller.initialize()
+        self.loadout_manager_controller.initialize()
         
         # Update status display
         self.views.set_status(self.app_state.get_status())
@@ -519,3 +814,11 @@ class ApplicationController:
     def get_module_editor_controller(self):
         """Get module editor controller"""
         return self.module_editor_controller
+    
+    def get_enhance_simulator_controller(self):
+        """Get enhance simulator controller"""
+        return self.enhance_simulator_controller
+    
+    def get_loadout_manager_controller(self):
+        """Get loadout manager controller"""
+        return self.loadout_manager_controller
