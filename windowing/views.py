@@ -1044,7 +1044,7 @@ class LoadoutManagerView(BaseView):
     
     def update_display(self, data):
         """Update loadout list"""
-        loadouts = list(data.keys())
+        loadouts = data if isinstance(data, list) else list(data.keys())
         self.loadout_combo.configure(values=loadouts)
         if loadouts and not self.loadout_var.get():
             self.loadout_var.set(loadouts[0])
