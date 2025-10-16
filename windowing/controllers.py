@@ -751,6 +751,31 @@ class LoadoutManagerController(BaseController):
             messagebox.showerror("Error", f"Failed to calculate stats: {e}")
 
 
+class SystemOverviewController(BaseController):
+    """Controller for system overview"""
+    
+    def __init__(self, model, view, app_state):
+        super().__init__(model, view)
+        self.app_state = app_state
+    
+    def initialize(self):
+        """Initialize system overview controller"""
+        self.refresh_overview()
+    
+    def refresh_overview(self):
+        """Refresh system overview data"""
+        try:
+            overview_data = self.model.get_system_overview_data()
+            self.view.update_display(overview_data)
+            self.app_state.set_status("System overview updated")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to refresh overview: {e}")
+    
+    def on_data_change(self):
+        """Handle data changes that require overview refresh"""
+        self.refresh_overview()
+
+
 class ApplicationController:
     """Main application controller that coordinates all sub-controllers"""
     
@@ -784,6 +809,12 @@ class ApplicationController:
             app_state
         )
         
+        self.system_overview_controller = SystemOverviewController(
+            models['mathic'], 
+            views.get_system_overview_view(), 
+            app_state
+        )
+        
         # Bind action buttons
         self._bind_character_actions()
     
@@ -793,6 +824,7 @@ class ApplicationController:
         self.module_editor_controller.initialize()
         self.enhance_simulator_controller.initialize()
         self.loadout_manager_controller.initialize()
+        self.system_overview_controller.initialize()
         
         # Update status display
         self.views.set_status(self.app_state.get_status())
@@ -822,3 +854,16 @@ class ApplicationController:
     def get_loadout_manager_controller(self):
         """Get loadout manager controller"""
         return self.loadout_manager_controller
+    
+    def get_system_overview_controller(self):
+        """Get system overview controller"""
+        return self.system_overview_controller
+    
+    def notify_data_change(self):
+        """Notify all controllers that data has changed"""
+        # Refresh system overview when any mathic data changes
+        self.system_overview_controller.on_data_change()
+        
+        # Refresh other views that might depend on the data
+        self.module_editor_controller.refresh_module_list()
+        self.loadout_manager_controller.refresh_loadout_list()

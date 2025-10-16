@@ -295,6 +295,44 @@ class MathicModel:
                 
             except Exception as e:
                 print(f"Error creating sample modules: {e}")
+    
+    def get_system_overview_data(self):
+        """Get system overview statistics"""
+        modules = self.mathic_system.modules
+        loadouts = self.mathic_system.mathic_loadouts
+        
+        overview_data = {
+            'module_count': len(modules),
+            'loadout_count': len(loadouts),
+            'type_counts': {},
+            'avg_level': 0,
+            'max_level': 0,
+            'loadout_info': {}
+        }
+        
+        if modules:
+            # Calculate module type distribution and level statistics
+            level_sum = 0
+            max_level = 0
+            
+            for module in modules.values():
+                # Count module types
+                module_type = module.module_type
+                overview_data['type_counts'][module_type] = overview_data['type_counts'].get(module_type, 0) + 1
+                
+                # Track enhancement levels
+                level_sum += module.level
+                max_level = max(max_level, module.level)
+            
+            overview_data['avg_level'] = level_sum / len(modules)
+            overview_data['max_level'] = max_level
+        
+        # Calculate loadout equipment information
+        for loadout_name, loadout in loadouts.items():
+            equipped_count = sum(1 for module_id in loadout.values() if module_id)
+            overview_data['loadout_info'][loadout_name] = equipped_count
+        
+        return overview_data
 
 
 class AppState:
