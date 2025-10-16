@@ -35,3 +35,6 @@ var/**
 # temp
 pkg/**
 bak/**
+
+**/summary/**
+**/test_env/**
