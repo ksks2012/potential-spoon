@@ -4,6 +4,13 @@ from bs4 import BeautifulSoup
 import re
 import json
 
+# Add parent directory to path to import db module
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
+from db.matrix_db import MatrixDatabase
+
 
 class MatrixEffectsParser:
     def __init__(self, html_file_path):
@@ -171,14 +178,40 @@ class MatrixEffectsParser:
         self.matrix_effects = matrix_effects
         return matrix_effects
     
+    def save_to_database(self, db_path=None):
+        """Save extracted data to SQLite database"""
+        try:
+            if db_path:
+                db = MatrixDatabase(db_path)
+            else:
+                db = MatrixDatabase()
+            
+            # Clear existing data
+            db.clear_all_data()
+            print("Cleared existing matrix effects data")
+            
+            # Insert all matrix effects
+            inserted_count = 0
+            for matrix_data in self.matrix_effects:
+                matrix_id = db.insert_matrix_effect(matrix_data)
+                if matrix_id:
+                    inserted_count += 1
+                    print(f"Inserted: {matrix_data['name']} (ID: {matrix_id})")
+            
+            print(f"Matrix effects data saved to database: {inserted_count} effects inserted")
+            return db
+        except Exception as e:
+            print(f"Error saving to database: {e}")
+            return None
+    
     def save_to_json(self, output_file):
-        """Save extracted data to JSON file"""
+        """Save extracted data to JSON file (backup option)"""
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(self.matrix_effects, f, indent=2, ensure_ascii=False)
-            print(f"Matrix effects data saved to {output_file}")
+            print(f"Matrix effects data also saved to {output_file}")
         except Exception as e:
-            print(f"Error saving data: {e}")
+            print(f"Error saving JSON backup: {e}")
     
     def print_matrix_effects(self):
         """Print all matrix effects in a formatted way"""
@@ -233,25 +266,47 @@ def main():
         print(f"\nFound {len(parser.matrix_effects)} matrix effects:")
         parser.print_matrix_effects()
         
-        # Save to JSON file
+        # Save to database (primary storage)
+        print("\n" + "="*50)
+        print("Saving to database...")
+        db = parser.save_to_database()
+        
+        # Save to JSON file as backup
         output_file = html_file.replace('.html', '_parsed.json')
         parser.save_to_json(output_file)
         
+        # Show database statistics
+        if db:
+            print("\n" + "="*50)
+            print("Database Statistics:")
+            stats = db.get_stats_summary()
+            print(f"Total matrices: {stats['total_count']}")
+            
+            print("\nBy Source:")
+            for source, count in stats['source_counts'].items():
+                print(f"  {source}: {count}")
+            
+            print("\nBy Type:")
+            for type_name, count in stats['type_counts'].items():
+                print(f"  {type_name}: {count}")
+        
         # Show example format like requested
         print("\n" + "="*50)
-        print("Example format (first matrix):")
-        if parser.matrix_effects:
-            matrix = parser.matrix_effects[0]
-            print(f"- name: {matrix.get('name')}")
-            # Display type as joined string for better readability
-            type_list = matrix.get('type', [])
-            print(f"- Type: {' / '.join(type_list)}")
-            print(f"- Source: {matrix.get('source')}")
-            for effect in matrix.get('effects', []):
-                print(f"- {effect['required']}/{effect['total']}:")
-                print(f"    effect: {effect['effect']}")
-                if 'extra_effect' in effect:
-                    print(f"    extra_effect: {effect['extra_effect']}")
+        print("Example format (first matrix from database):")
+        if db:
+            all_matrices = db.get_all_matrix_effects()
+            if all_matrices:
+                matrix = all_matrices[0]
+                print(f"- name: {matrix.get('name')}")
+                # Display type as joined string for better readability
+                type_list = matrix.get('type', [])
+                print(f"- Type: {' / '.join(type_list)}")
+                print(f"- Source: {matrix.get('source')}")
+                for effect in matrix.get('effects', []):
+                    print(f"- {effect['required']}/{effect['total']}:")
+                    print(f"    effect: {effect['effect']}")
+                    if 'extra_effect' in effect:
+                        print(f"    extra_effect: {effect['extra_effect']}")
 
 
 if __name__ == "__main__":
