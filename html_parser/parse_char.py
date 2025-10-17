@@ -4,14 +4,34 @@ from bs4 import BeautifulSoup
 import re
 import json
 
+# Add parent directory to path for database imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
+try:
+    from db.etheria_manager import EtheriaManager
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Database modules not available: {e}")
+    print("Running in JSON-only mode")
+    DATABASE_AVAILABLE = False
+
 
 class CharacterParser:
-    def __init__(self, html_file_path):
+    def __init__(self, html_file_path, use_database=True, db_path="./db/etheria.db"):
         """Initialize parser with HTML file path as parameter"""
         self.html_file = html_file_path
         self.soup = None
         self.data = {}
         self.character_data = {}
+        self.use_database = use_database and DATABASE_AVAILABLE
+        
+        if self.use_database:
+            # Initialize unified database manager
+            self.db_manager = EtheriaManager(db_path)
+        else:
+            self.db_manager = None
     
     def load_html(self):
         """Load the HTML file"""
@@ -387,6 +407,54 @@ class CharacterParser:
             print(f"Error saving to JSON: {e}")
             return False
     
+    def save_to_database(self, validate_order=True):
+        """Save parsed character data to unified database
+        
+        Args:
+            validate_order: If True, checks that matrices and shells exist first
+        """
+        if not self.use_database:
+            print("Database mode not enabled")
+            return False
+        
+        if validate_order:
+            # Check database state to ensure proper order
+            stats = self.db_manager.get_comprehensive_stats()
+            matrix_count = stats['database']['total_matrix_effects']
+            shell_count = stats['database']['total_shells']
+            
+            if matrix_count == 0 and shell_count == 0:
+                print("ℹ️  Note: No matrices or shells in database yet. Consider loading them first for full integration.")
+            elif matrix_count > 0 and shell_count == 0:
+                print("ℹ️  Note: Matrices loaded but no shells. Consider loading shells for equipment options.")
+            elif matrix_count > 0 and shell_count > 0:
+                print(f"✅ Database ready: {matrix_count} matrices, {shell_count} shells available for character integration.")
+        
+        try:
+            character_id = self.db_manager.characters.insert_character(self.character_data)
+            if character_id:
+                char_name = self.character_data.get('basic_info', {}).get('name', 'Unknown')
+                print(f"✅ Character '{char_name}' saved to database (ID: {character_id})")
+                
+                # Show database statistics
+                stats = self.db_manager.get_comprehensive_stats()
+                print(f"Database now contains {stats['database']['total_characters']} characters")
+                
+                # Show integration possibilities
+                if stats['database']['total_shells'] > 0:
+                    print(f"🔗 {stats['database']['total_shells']} shells available for equipment")
+                if stats['database']['total_matrix_effects'] > 0:
+                    print(f"🔗 {stats['database']['total_matrix_effects']} matrix effects available for loadouts")
+                
+                return True
+            else:
+                print("❌ Failed to save character to database")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Error saving character to database: {e}")
+            return False
+    
     def print_summary(self):
         """Print a formatted summary of parsed data"""
         print("\n" + "="*50)
@@ -437,7 +505,7 @@ def main():
     # Check command line arguments
     if len(sys.argv) < 2:
         print("Usage: python parse_char.py <html_file_path>")
-        print("Example: python parse_char.py ./var/Plume.html")
+        print("Example: python parse_char.py ./var/character/Plume.html")
         return
     
     # Get HTML file path from command line argument
