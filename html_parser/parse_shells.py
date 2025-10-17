@@ -4,14 +4,37 @@ from bs4 import BeautifulSoup
 import re
 import json
 
+# Add parent directory to path for database imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
+try:
+    from db.shells_db import ShellsDatabase
+    from db.integrated_db import IntegratedDatabase
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Database modules not available: {e}")
+    print("Running in JSON-only mode")
+    DATABASE_AVAILABLE = False
+
 
 class ShellParser:
-    def __init__(self, html_file_path):
+    def __init__(self, html_file_path, use_database=True):
         """Initialize parser with HTML file path as parameter"""
         self.html_file = html_file_path
         self.soup = None
         self.data = {}
         self.shells_data = []
+        self.use_database = use_database and DATABASE_AVAILABLE
+        
+        if self.use_database:
+            # Initialize database connections
+            self.shells_db = ShellsDatabase()
+            self.integrated_db = IntegratedDatabase()
+        else:
+            self.shells_db = None
+            self.integrated_db = None
     
     def load_html(self):
         """Load the HTML file"""
@@ -215,8 +238,40 @@ class ShellParser:
         
         return self.shells_data
     
+    def save_to_database(self):
+        """Save parsed data to SQLite database"""
+        if not self.use_database:
+            print("Database mode not enabled")
+            return False
+        
+        try:
+            # Clear existing data
+            self.shells_db.clear_all_data()
+            print("Cleared existing shells data from database")
+            
+            # Insert all shells
+            inserted_count = 0
+            for shell_data in self.shells_data:
+                shell_id = self.shells_db.insert_shell(shell_data)
+                if shell_id:
+                    inserted_count += 1
+                    print(f"Inserted shell: {shell_data.get('name', 'Unknown')} (ID: {shell_id})")
+            
+            print(f"\n=== Database Save Summary ===")
+            print(f"Total shells saved to database: {inserted_count}")
+            
+            # Show database statistics
+            stats = self.shells_db.get_stats_summary()
+            print(f"Database contains {stats['total_count']} shells")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error saving to database: {e}")
+            return False
+    
     def save_to_json(self, output_file=None):
-        """Save parsed data to JSON file"""
+        """Save parsed data to JSON file (legacy method)"""
         if not output_file:
             # Generate output filename based on input filename
             base_name = os.path.splitext(os.path.basename(self.html_file))[0]
@@ -229,6 +284,54 @@ class ShellParser:
             print(f"Total shells parsed: {len(self.shells_data)}")
         except Exception as e:
             print(f"Error saving to JSON: {e}")
+    
+    def create_missing_matrix_effects(self):
+        """Create missing matrix effects based on shell references"""
+        if not self.use_database:
+            print("Database mode not enabled")
+            return 0
+        
+        try:
+            created_count = self.integrated_db.create_missing_matrix_effects("shells_parser")
+            print(f"Created {created_count} missing matrix effects")
+            return created_count
+        except Exception as e:
+            print(f"Error creating missing matrix effects: {e}")
+            return 0
+    
+    def analyze_matrix_integration(self):
+        """Analyze matrix integration with shells"""
+        if not self.use_database:
+            print("Database mode not enabled")
+            return None
+        
+        try:
+            analysis = self.integrated_db.get_matrix_usage_analysis()
+            
+            print(f"\n=== Matrix Integration Analysis ===")
+            print(f"Total matrix sets referenced by shells: {analysis['total_matrix_sets_used']}")
+            print(f"Total matrix effects available: {analysis['total_matrix_effects_available']}")
+            print(f"Coverage percentage: {analysis['coverage_percentage']:.1f}%")
+            
+            if analysis['missing_matrix_effects']:
+                print(f"\nMissing matrix effects ({len(analysis['missing_matrix_effects'])}):")
+                for missing in analysis['missing_matrix_effects'][:10]:  # Show first 10
+                    print(f"  - {missing}")
+                if len(analysis['missing_matrix_effects']) > 10:
+                    print(f"  ... and {len(analysis['missing_matrix_effects']) - 10} more")
+            
+            if analysis['unused_matrix_effects']:
+                print(f"\nUnused matrix effects ({len(analysis['unused_matrix_effects'])}):")
+                for unused in analysis['unused_matrix_effects'][:10]:  # Show first 10
+                    print(f"  - {unused}")
+                if len(analysis['unused_matrix_effects']) > 10:
+                    print(f"  ... and {len(analysis['unused_matrix_effects']) - 10} more")
+            
+            return analysis
+            
+        except Exception as e:
+            print(f"Error analyzing matrix integration: {e}")
+            return None
     
     def print_summary(self):
         """Print a summary of parsed shells"""
@@ -266,18 +369,24 @@ class ShellParser:
 
 def main():
     """Main function to run the parser"""
-    if len(sys.argv) != 2:
-        print("Usage: python parse_shells.py <html_file_path>")
+    if len(sys.argv) < 2:
+        print("Usage: python parse_shells.py <html_file_path> [--json-only]")
+        print("Options:")
+        print("  --json-only    Save to JSON only (skip database)")
         sys.exit(1)
     
     html_file = sys.argv[1]
+    json_only = "--json-only" in sys.argv or not DATABASE_AVAILABLE
+    
+    if not DATABASE_AVAILABLE:
+        print("Database modules not available, using JSON-only mode")
     
     if not os.path.exists(html_file):
         print(f"Error: HTML file '{html_file}' not found")
         sys.exit(1)
     
     # Create parser and process
-    parser = ShellParser(html_file)
+    parser = ShellParser(html_file, use_database=not json_only)
     
     if not parser.load_html():
         print("Failed to load HTML file")
@@ -289,8 +398,28 @@ def main():
     # Print summary
     parser.print_summary()
     
-    # Save to JSON
-    parser.save_to_json()
+    if json_only or not DATABASE_AVAILABLE:
+        # Save to JSON only
+        parser.save_to_json()
+    else:
+        # Save to database (primary method)
+        success = parser.save_to_database()
+        
+        if success:
+            # Analyze matrix integration
+            parser.analyze_matrix_integration()
+            
+            # Create missing matrix effects if needed
+            parser.create_missing_matrix_effects()
+            
+            # Export combined data
+            try:
+                parser.integrated_db.export_combined_data()
+            except Exception as e:
+                print(f"Warning: Could not export combined data: {e}")
+        
+        # Also save JSON as backup
+        parser.save_to_json()
     
     print("\nParsing completed successfully!")
 
