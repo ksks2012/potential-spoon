@@ -303,12 +303,11 @@ class EtheriaDatabase:
         """Insert initial lookup data"""
         # Insert common rarities
         rarities = [
-            ('N', '#808080', 0),
-            ('R', '#00ff00', 1),
-            ('SR', '#0080ff', 2),
-            ('SSR', '#8000ff', 3),
-            ('Legendary', '#ff8000', 4),
-            ('Mythic', '#ff0080', 5)
+            ('R', '#0080ff', 0),
+            ('SR', '#8000ff', 1),
+            ('SSR', "#e7e553", 2),
+            ('Legendary', '#ff8000', 3),
+            ('Mythic', '#ff0080', 4)
         ]
         
         cursor.execute('SELECT COUNT(*) FROM rarities')
