@@ -320,11 +320,11 @@ class EtheriaDatabase:
         
         # Insert common elements
         elements = [
-            ('Physical', '#ff4444', 'Physical damage type'),
-            ('Volt', '#ffff44', 'Electrical damage type'),
-            ('Ice', '#4488ff', 'Ice/Frost damage type'),
-            ('Fire', '#ff8844', 'Fire/Heat damage type'),
-            ('Altered', '#8844ff', 'Altered dimension damage type')
+            ('Reason', '#ff4444', ''),
+            ('Hollow', "#44ff6d", ''),
+            ('Odd', '#4488ff', ''),
+            ('Constant', "#fff9c1", ''),
+            ('Disorder', '#8844ff', '')
         ]
         
         cursor.execute('SELECT COUNT(*) FROM elements')
