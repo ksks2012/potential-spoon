@@ -7,6 +7,8 @@ Contains UI components separated from business logic
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from abc import ABC, abstractmethod
+import os
+from PIL import Image, ImageTk
 
 
 class BaseView(ABC):
@@ -1137,6 +1139,10 @@ class ShellListView(BaseView):
         self.matrix_vars = {}
         self.selected_matrices = []
         
+        # Matrix images cache
+        self.matrix_images = {}
+        self.matrix_image_path = "./img/matrices/"
+        
         # Shell details widgets
         self.shell_name_label = None
         self.shell_rarity_label = None
@@ -1374,7 +1380,7 @@ class ShellListView(BaseView):
         self._create_matrix_checkboxes(matrices)
     
     def _create_matrix_checkboxes(self, matrices):
-        """Create matrix effect checkboxes"""
+        """Create matrix effect checkboxes with images"""
         # Clear existing checkboxes
         for widget in self.matrix_scroll_frame.winfo_children():
             widget.destroy()
@@ -1390,13 +1396,60 @@ class ShellListView(BaseView):
             var = tk.BooleanVar()
             self.matrix_vars[matrix] = var
             
-            checkbox = ttk.Checkbutton(
-                self.matrix_scroll_frame, 
-                text=matrix, 
-                variable=var,
-                command=self._apply_filters
-            )
-            checkbox.grid(row=row, column=col, sticky=tk.W, padx=5, pady=2)
+            # Load matrix image
+            matrix_image = self._load_matrix_image(matrix)
+            
+            # Create frame for checkbox with image
+            checkbox_frame = ttk.Frame(self.matrix_scroll_frame)
+            checkbox_frame.grid(row=row, column=col, sticky=tk.W, padx=5, pady=2)
+            
+            # Create checkbox with image
+            if matrix_image:
+                checkbox = ttk.Checkbutton(
+                    checkbox_frame, 
+                    text=f"  {matrix}",  # Add space for image
+                    variable=var,
+                    command=self._apply_filters,
+                    image=matrix_image,
+                    compound=tk.LEFT
+                )
+            else:
+                checkbox = ttk.Checkbutton(
+                    checkbox_frame, 
+                    text=matrix, 
+                    variable=var,
+                    command=self._apply_filters
+                )
+            
+            checkbox.pack(side=tk.LEFT, anchor=tk.W)
+    
+    def _load_matrix_image(self, matrix_name):
+        """Load and cache matrix image"""
+        if matrix_name in self.matrix_images:
+            return self.matrix_images[matrix_name]
+        
+        try:
+            # Convert matrix name to file name format
+            file_name = f"set_{matrix_name.lower()}.webp"
+            image_path = os.path.join(self.matrix_image_path, file_name)
+            
+            if os.path.exists(image_path):
+                # Load and resize image
+                pil_image = Image.open(image_path)
+                # Resize to a small size for checkbox (24x24 pixels)
+                pil_image = pil_image.resize((24, 24), Image.Resampling.LANCZOS)
+                tk_image = ImageTk.PhotoImage(pil_image)
+                
+                # Cache the image
+                self.matrix_images[matrix_name] = tk_image
+                return tk_image
+            else:
+                print(f"Warning: Image not found for matrix '{matrix_name}' at {image_path}")
+                return None
+                
+        except Exception as e:
+            print(f"Error loading image for matrix '{matrix_name}': {e}")
+            return None
     
     def update_shell_details(self, shell_data):
         """Update shell details display"""
