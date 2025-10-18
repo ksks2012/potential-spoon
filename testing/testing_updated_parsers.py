@@ -6,6 +6,7 @@ Tests the correct order: matrix -> shell -> character
 
 import sys
 import os
+import glob
 
 # Set correct path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,17 +24,34 @@ def test_individual_parsers():
     test_files = {
         'matrix': './var/MatrixEffects.html',
         'shells': './var/shells.html', 
-        'character': './var/character/Plume.html'
+        'characters': []  # Will be populated with all character files
     }
     
-    # Check which files exist
+    # Find all character HTML files
+    character_pattern = './var/character/*.html'
+    character_files = glob.glob(character_pattern)
+    
+    if character_files:
+        test_files['characters'] = character_files
+        print(f"✅ Found {len(character_files)} character files:")
+        for char_file in sorted(character_files):
+            char_name = os.path.basename(char_file).replace('.html', '')
+            print(f"   - {char_name}")
+    else:
+        print("❌ No character files found in ./var/character/")
+    
+    # Check other files
     available_files = {}
     for data_type, file_path in test_files.items():
-        if os.path.exists(file_path):
-            available_files[data_type] = file_path
-            print(f"✅ Found {data_type} file: {file_path}")
+        if data_type == 'characters':
+            if character_files:
+                available_files[data_type] = character_files
         else:
-            print(f"❌ Missing {data_type} file: {file_path}")
+            if os.path.exists(file_path):
+                available_files[data_type] = file_path
+                print(f"✅ Found {data_type} file: {file_path}")
+            else:
+                print(f"❌ Missing {data_type} file: {file_path}")
     
     if not available_files:
         print("❌ No test files found. Please ensure HTML files exist in ./var/ directory")
@@ -56,11 +74,14 @@ def test_unified_parsing(available_files):
     
     parser = UnifiedParser(test_db_path)
     
-    # Parse and store all available data in correct order
+    # Prepare character files list
+    character_files = available_files.get('characters', [])
+    
+    # Parse and store all available data in correct order using new method
     success = parser.parse_and_store_all(
         matrix_html=available_files.get('matrix'),
         shells_html=available_files.get('shells'),
-        character_html=available_files.get('character')
+        character_html_list=character_files if character_files else None
     )
     
     return success

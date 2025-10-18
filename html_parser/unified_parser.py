@@ -26,7 +26,7 @@ class UnifiedParser:
         self.db_manager = EtheriaManager(db_path)
         self.matrix_parser = None
         self.shell_parser = None
-        self.character_parser = None
+        self.character_parsers = []  # Changed to list for multiple characters
         
         # Storage stats
         self.stats = {
@@ -74,21 +74,37 @@ class UnifiedParser:
     
     def parse_character(self, html_file_path):
         """Parse character from HTML file"""
-        print("\n=== Step 3: Parsing Character ===")
+        char_name = os.path.basename(html_file_path).replace('.html', '')
+        print(f"=== Parsing Character: {char_name} ===")
         
         try:
-            self.character_parser = CharacterParser(html_file_path, use_database=False)
-            self.character_parser.load_html()
-            self.character_parser.parse_all()  # Use correct method name
+            character_parser = CharacterParser(html_file_path, use_database=False)
+            character_parser.load_html()
+            character_parser.parse_all()  # Use correct method name
             
-            char_name = self.character_parser.character_data.get('basic_info', {}).get('name', 'Unknown')
-            print(f"Parsed character: {char_name}")
+            # Store parser for later database insertion
+            self.character_parsers.append(character_parser)
+            
+            parsed_char_name = character_parser.character_data.get('basic_info', {}).get('name', char_name)
+            print(f"Parsed character: {parsed_char_name}")
             return True
             
         except Exception as e:
-            print(f"Error parsing character: {e}")
+            print(f"Error parsing character {char_name}: {e}")
             self.stats['total_errors'] += 1
             return False
+    
+    def parse_multiple_characters(self, character_file_list):
+        """Parse multiple character files"""
+        print(f"\n=== Step 3: Parsing {len(character_file_list)} Characters ===")
+        
+        success_count = 0
+        for char_file in character_file_list:
+            if self.parse_character(char_file):
+                success_count += 1
+        
+        print(f"Successfully parsed {success_count}/{len(character_file_list)} characters")
+        return success_count > 0
     
     def store_to_database(self):
         """Store all parsed data to database in correct order"""
@@ -149,22 +165,25 @@ class UnifiedParser:
                     self.stats['total_errors'] += 1
         
         # Step 3: Store characters (no dependencies on shells/matrices for basic data)
-        if self.character_parser and self.character_parser.character_data:
-            print("\n=== Step 3: Storing Character ===")
+        if self.character_parsers:
+            print(f"\n=== Step 3: Storing {len(self.character_parsers)} Characters ===")
             
-            try:
-                character_id = self.db_manager.characters.insert_character(self.character_parser.character_data)
-                if character_id:
-                    self.stats['characters_inserted'] += 1
-                    char_name = self.character_parser.character_data.get('basic_info', {}).get('name', 'Unknown')
-                    print(f"✅ Inserted character: {char_name} (ID: {character_id})")
-                else:
-                    print("❌ Failed to insert character")
+            for character_parser in self.character_parsers:
+                try:
+                    character_id = self.db_manager.characters.insert_character(character_parser.character_data)
+                    if character_id:
+                        self.stats['characters_inserted'] += 1
+                        char_name = character_parser.character_data.get('basic_info', {}).get('name', 'Unknown')
+                        print(f"✅ Inserted character: {char_name} (ID: {character_id})")
+                    else:
+                        char_name = character_parser.character_data.get('basic_info', {}).get('name', 'Unknown')
+                        print(f"❌ Failed to insert character: {char_name}")
+                        self.stats['total_errors'] += 1
+                        
+                except Exception as e:
+                    char_name = character_parser.character_data.get('basic_info', {}).get('name', 'Unknown')
+                    print(f"❌ Error inserting character {char_name}: {e}")
                     self.stats['total_errors'] += 1
-                    
-            except Exception as e:
-                print(f"❌ Error inserting character: {e}")
-                self.stats['total_errors'] += 1
     
     def print_final_summary(self):
         """Print final summary of parsing and storage operations"""
@@ -213,8 +232,16 @@ class UnifiedParser:
         else:
             print(f"\n❌ No data was successfully stored")
     
-    def parse_and_store_all(self, matrix_html=None, shells_html=None, character_html=None):
-        """Parse and store all data types in correct order"""
+    def parse_and_store_all(self, matrix_html=None, shells_html=None, 
+                           character_html=None, character_html_list=None):
+        """Parse and store all data types in correct order
+        
+        Args:
+            matrix_html: Path to matrix effects HTML file
+            shells_html: Path to shells HTML file  
+            character_html: Path to single character HTML file (legacy)
+            character_html_list: List of character HTML file paths
+        """
         success_count = 0
         
         # Parse matrix effects first
@@ -227,8 +254,13 @@ class UnifiedParser:
             if self.parse_shells(shells_html):
                 success_count += 1
         
-        # Parse character third
-        if character_html:
+        # Parse characters third - support both single and multiple characters
+        if character_html_list:
+            # Parse multiple characters
+            if self.parse_multiple_characters(character_html_list):
+                success_count += 1
+        elif character_html:
+            # Parse single character (legacy support)
             if self.parse_character(character_html):
                 success_count += 1
         
