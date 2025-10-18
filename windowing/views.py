@@ -1143,6 +1143,10 @@ class ShellListView(BaseView):
         self.matrix_images = {}
         self.matrix_image_path = "./img/matrices/"
         
+        # Shell images cache
+        self.shell_images = {}
+        self.shell_image_path = "./img/shells/"
+        
         # Shell details widgets
         self.shell_name_label = None
         self.shell_rarity_label = None
@@ -1265,9 +1269,21 @@ class ShellListView(BaseView):
         details_frame = ttk.LabelFrame(parent, text="Shell Details", padding="10")
         details_frame.pack(fill=tk.BOTH, expand=True)
         
-        # Basic info section
-        info_frame = ttk.Frame(details_frame)
-        info_frame.pack(fill=tk.X, pady=(0, 10))
+        # Main container with shell image and info
+        main_info_frame = ttk.Frame(details_frame)
+        main_info_frame.pack(fill=tk.X, pady=(0, 10))
+        
+        # Left side - Shell image
+        image_frame = ttk.Frame(main_info_frame)
+        image_frame.pack(side=tk.LEFT, padx=(0, 15))
+        
+        # Shell image display (64x64 pixels)
+        self.shell_image_label = ttk.Label(image_frame, text="No Image", relief=tk.SUNKEN, width=10)
+        self.shell_image_label.pack()
+        
+        # Right side - Basic info section
+        info_frame = ttk.Frame(main_info_frame)
+        info_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # Name
         ttk.Label(info_frame, text="Name:", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=tk.W)
@@ -1451,14 +1467,52 @@ class ShellListView(BaseView):
             print(f"Error loading image for matrix '{matrix_name}': {e}")
             return None
     
+    def _load_shell_image(self, shell_name):
+        """Load and cache shell image"""
+        if shell_name in self.shell_images:
+            return self.shell_images[shell_name]
+        
+        try:
+            # Convert shell name to file name format
+            # Replace spaces with underscores and convert to lowercase
+            file_name = f"shell_{shell_name.lower().replace(' ', '_').replace('-', '_')}.webp"
+            image_path = os.path.join(self.shell_image_path, file_name)
+            
+            if os.path.exists(image_path):
+                # Load and resize image
+                pil_image = Image.open(image_path)
+                # Resize to 64x64 pixels for shell details display
+                pil_image = pil_image.resize((64, 64), Image.Resampling.LANCZOS)
+                tk_image = ImageTk.PhotoImage(pil_image)
+                
+                # Cache the image
+                self.shell_images[shell_name] = tk_image
+                return tk_image
+            else:
+                print(f"Warning: Image not found for shell '{shell_name}' at {image_path}")
+                return None
+                
+        except Exception as e:
+            print(f"Error loading image for shell '{shell_name}': {e}")
+            return None
+    
     def update_shell_details(self, shell_data):
         """Update shell details display"""
         if not shell_data:
             self._clear_shell_details()
             return
         
+        shell_name = shell_data.get('name', '')
+        
+        # Update shell image
+        shell_image = self._load_shell_image(shell_name)
+        if shell_image:
+            self.shell_image_label.config(image=shell_image, text="")
+        else:
+            self.shell_image_label.config(image="", text="No Image")
+        
         # Update basic info
-        self.shell_name_label.config(text=shell_data.get('name', '-'))
+        self.shell_name_label.config(text=shell_name or '-')
         self.shell_rarity_label.config(text=shell_data.get('rarity', '-'))
         self.shell_class_label.config(text=shell_data.get('class', '-'))
         self.shell_cooldown_label.config(text=f"{shell_data.get('cooldown', '-')}s")
@@ -1474,6 +1528,9 @@ class ShellListView(BaseView):
     
     def _clear_shell_details(self):
         """Clear shell details display"""
+        # Clear shell image
+        self.shell_image_label.config(image="", text="No Image")
+        
         self.shell_name_label.config(text="-")
         self.shell_rarity_label.config(text="-")
         self.shell_class_label.config(text="-")
