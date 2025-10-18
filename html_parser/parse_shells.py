@@ -10,8 +10,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
 try:
-    from db.shells_db import ShellsDatabase
-    from db.integrated_db import IntegratedDatabase
+    from db.etheria_manager import EtheriaManager
     DATABASE_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Database modules not available: {e}")
@@ -20,7 +19,7 @@ except ImportError as e:
 
 
 class ShellParser:
-    def __init__(self, html_file_path, use_database=True):
+    def __init__(self, html_file_path, use_database=True, db_path="./db/etheria.db"):
         """Initialize parser with HTML file path as parameter"""
         self.html_file = html_file_path
         self.soup = None
@@ -29,12 +28,10 @@ class ShellParser:
         self.use_database = use_database and DATABASE_AVAILABLE
         
         if self.use_database:
-            # Initialize database connections
-            self.shells_db = ShellsDatabase()
-            self.integrated_db = IntegratedDatabase()
+            # Initialize unified database manager
+            self.db_manager = EtheriaManager(db_path)
         else:
-            self.shells_db = None
-            self.integrated_db = None
+            self.db_manager = None
     
     def load_html(self):
         """Load the HTML file"""
@@ -238,33 +235,72 @@ class ShellParser:
         
         return self.shells_data
     
-    def save_to_database(self):
-        """Save parsed data to SQLite database"""
+    def save_to_database(self, validate_matrix_refs=True):
+        """Save parsed data to unified database
+        
+        Args:
+            validate_matrix_refs: If True, validates that matrix references exist in database
+        """
         if not self.use_database:
             print("Database mode not enabled")
             return False
         
         try:
-            # Clear existing data
-            self.shells_db.clear_all_data()
-            print("Cleared existing shells data from database")
+            # Check if matrices exist in database
+            stats = self.db_manager.get_comprehensive_stats()
+            matrix_count = stats['database']['total_matrix_effects']
             
-            # Insert all shells
+            if validate_matrix_refs and matrix_count == 0:
+                print("⚠️  Warning: No matrix effects found in database. Matrix effects should be inserted first.")
+            
+            # Insert all shells using unified database
             inserted_count = 0
+            failed_count = 0
+            validation_warnings = 0
+            
             for shell_data in self.shells_data:
-                shell_id = self.shells_db.insert_shell(shell_data)
+                # Validate matrix set references if enabled
+                if validate_matrix_refs and 'sets' in shell_data:
+                    original_sets = shell_data['sets'][:]
+                    validated_sets = []
+                    
+                    for matrix_name in original_sets:
+                        matrix = self.db_manager.matrices.get_matrix_effect_by_name(matrix_name)
+                        if matrix:
+                            validated_sets.append(matrix_name)
+                        else:
+                            print(f"  ⚠️  Matrix reference not found in database: {matrix_name}")
+                            validation_warnings += 1
+                    
+                    # Update shell data with validated matrix sets
+                    shell_data['sets'] = validated_sets
+                    
+                    if len(validated_sets) != len(original_sets):
+                        shell_name = shell_data.get('name', 'Unknown')
+                        print(f"  📝 Shell '{shell_name}': {len(original_sets)} -> {len(validated_sets)} matrix references")
+                
+                # Insert shell into database
+                shell_id = self.db_manager.shells.insert_shell(shell_data)
                 if shell_id:
                     inserted_count += 1
-                    print(f"Inserted shell: {shell_data.get('name', 'Unknown')} (ID: {shell_id})")
+                    shell_name = shell_data.get('name', 'Unknown')
+                    matrix_count = len(shell_data.get('sets', []))
+                    print(f"✅ Inserted shell: {shell_name} (ID: {shell_id}) with {matrix_count} matrix references")
+                else:
+                    failed_count += 1
+                    print(f"❌ Failed to insert shell: {shell_data.get('name', 'Unknown')}")
             
-            print(f"\n=== Database Save Summary ===")
+            print(f"\n=== Shell Database Save Summary ===")
             print(f"Total shells saved to database: {inserted_count}")
+            print(f"Failed insertions: {failed_count}")
+            print(f"Matrix reference warnings: {validation_warnings}")
             
-            # Show database statistics
-            stats = self.shells_db.get_stats_summary()
-            print(f"Database contains {stats['total_count']} shells")
+            # Show database statistics using unified manager
+            stats = self.db_manager.get_comprehensive_stats()
+            print(f"Database contains {stats['database']['total_shells']} shells")
+            print(f"Shell-matrix relationships: {stats['database']['shell_matrix_relationships']}")
             
-            return True
+            return inserted_count > 0
             
         except Exception as e:
             print(f"Error saving to database: {e}")

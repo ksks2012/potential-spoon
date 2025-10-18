@@ -30,6 +30,8 @@ var/**
 *.html
 *.csv
 *.db
+*.db-journal
+*.sqlite3
 *.bak
 
 # temp

@@ -11,70 +11,124 @@ import os
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
-from db.db_routing import CharacterDatabase
+from db.etheria_manager import EtheriaManager
 from html_parser.parse_char import CharacterParser
 from mathic.mathic_system import MathicSystem
 
 
 class CharacterModel:
-    """Model for character data management"""
+    """Model for character data management using unified database"""
     
     def __init__(self):
-        self.db = CharacterDatabase()
+        self.manager = EtheriaManager()
         self._characters = []
         self._selected_character = None
         
     def get_all_characters(self):
-        """Get all characters from database"""
-        self._characters = self.db.get_all_characters()
+        """Get all characters from unified database"""
+        self._characters = self.manager.characters.get_all_characters()
         return self._characters
     
     def search_characters(self, name_like=None):
-        """Search characters by name"""
-        return self.db.search_characters(name_like=name_like)
+        """Search characters by name using unified database"""
+        if not name_like:
+            return self.get_all_characters()
+        
+        # Use direct SQL query through manager
+        query = """
+            SELECT * FROM characters 
+            WHERE name LIKE ? 
+            ORDER BY name
+        """
+        results = self.manager.db.execute_query(query, (f'%{name_like}%',))
+        return results
     
     def filter_characters(self, rarity=None, element=None):
-        """Filter characters by rarity and element"""
-        search_params = {}
-        if rarity and rarity != "All":
-            search_params['rarity'] = rarity
-        if element and element != "All":
-            search_params['element'] = element
+        """Filter characters by rarity and element using unified database"""
+        conditions = []
+        params = []
         
-        if search_params:
-            return self.db.get_characters_by_criteria(**search_params)
+        if rarity and rarity != "All":
+            conditions.append("rarity = ?")
+            params.append(rarity)
+        if element and element != "All":
+            conditions.append("element = ?")
+            params.append(element)
+        
+        if conditions:
+            where_clause = " AND ".join(conditions)
+            query = f"""
+                SELECT * FROM characters 
+                WHERE {where_clause}
+                ORDER BY name
+            """
+            return self.manager.db.execute_query(query, params)
         else:
             return self.get_all_characters()
     
     def get_character_by_name(self, name):
-        """Get character details by name"""
-        return self.db.get_character_by_name(name)
+        """Get character details by name from unified database"""
+        return self.manager.characters.get_character_by_name(name)
     
     def delete_character(self, name):
-        """Delete character from database"""
-        return self.db.delete_character(name)
+        """Delete character from unified database"""
+        try:
+            query = "DELETE FROM characters WHERE name = ?"
+            with self.manager.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(query, (name,))
+                conn.commit()
+                return cursor.rowcount > 0
+        except Exception as e:
+            print(f"Error deleting character: {e}")
+            return False
     
     def import_character_from_html(self, file_path):
-        """Import character data from HTML file"""
-        parser = CharacterParser(file_path)
-        character_data = parser.parse_all()
-        
-        if character_data:
-            success = self.db.store_character(character_data)
+        """Import character data from HTML file using unified database"""
+        try:
+            parser = CharacterParser(file_path, use_database=True, db_path=self.manager.db.db_path)
+            parser.load_html()
+            parser.parse_all()
+            
+            success = parser.save_to_database()
             if success:
-                return True, f"Successfully imported {character_data['basic_info']['name']}"
+                char_name = parser.character_data.get('basic_info', {}).get('name', 'Unknown')
+                return True, f"Successfully imported {char_name}"
             else:
                 return False, "Failed to store character data"
-        else:
-            return False, "No character data found in HTML file"
+        except Exception as e:
+            return False, f"Import failed: {str(e)}"
     
-    def import_from_json(self, file_path):
-        """Import character data from JSON file"""
-        return self.db.import_from_json(file_path)
+    def get_character_stats(self):
+        """Get character statistics from unified database"""
+        stats = self.manager.get_comprehensive_stats()
+        return stats['database']
     
-    def export_to_json(self, character_name, file_path):
+    def export_character(self, character_name, file_path):
         """Export character data to JSON file"""
-        return self.db.export_to_json(character_name, file_path)
+        try:
+            character_data = self.get_character_by_name(character_name)
+            if character_data:
+                import json
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    json.dump(character_data, f, indent=2, ensure_ascii=False)
+                return True, f"Character '{character_name}' exported successfully"
+            else:
+                return False, f"Character '{character_name}' not found"
+        except Exception as e:
+            return False, f"Export failed: {str(e)}"
+    
+    def get_rarities(self):
+        """Get available rarities from database"""
+        query = "SELECT DISTINCT rarity FROM characters ORDER BY rarity"
+        results = self.manager.db.execute_query(query)
+        return [row['rarity'] for row in results]
+    
+    def get_elements(self):
+        """Get available elements from database"""
+        query = "SELECT DISTINCT element FROM characters ORDER BY element"
+        results = self.manager.db.execute_query(query)
+        return [row['element'] for row in results]
 
 
 class MathicModel:
@@ -333,6 +387,188 @@ class MathicModel:
             overview_data['loadout_info'][loadout_name] = equipped_count
         
         return overview_data
+
+
+class ShellModel:
+    """Model for shell data management using unified database"""
+    
+    def __init__(self):
+        self.manager = EtheriaManager()
+        self._shells = []
+        self._selected_shell = None
+    
+    def get_all_shells(self):
+        """Get all shells from unified database"""
+        self._shells = self.manager.shells.get_all_shells()
+        return self._shells
+    
+    def get_shell_by_name(self, name):
+        """Get shell details by name from unified database"""
+        return self.manager.shells.get_shell_by_name(name)
+    
+    def get_all_matrix_effects(self):
+        """Get all available matrix effects for filtering"""
+        query = "SELECT DISTINCT name FROM matrix_effects ORDER BY name"
+        results = self.manager.db.execute_query(query)
+        return [row['name'] for row in results]
+    
+    def get_shell_classes(self):
+        """Get available shell classes from database"""
+        query = "SELECT DISTINCT class FROM shells ORDER BY class"
+        results = self.manager.db.execute_query(query)
+        return [row['class'] for row in results]
+    
+    def get_shell_rarities(self):
+        """Get available shell rarities from database"""
+        query = "SELECT DISTINCT rarity FROM shells ORDER BY rarity"
+        results = self.manager.db.execute_query(query)
+        return [row['rarity'] for row in results]
+    
+    def filter_shells_by_matrix(self, matrix_names):
+        """Filter shells by matrix effects they support"""
+        if not matrix_names:
+            return self.get_all_shells()
+        
+        placeholders = ','.join('?' * len(matrix_names))
+        query = f"""
+            SELECT DISTINCT s.name
+            FROM shells s
+            JOIN shell_matrix_compatibility smc ON s.id = smc.shell_id
+            JOIN matrix_effects me ON smc.matrix_id = me.id
+            WHERE me.name IN ({placeholders})
+            GROUP BY s.id, s.name
+            HAVING COUNT(DISTINCT me.name) = ?
+            ORDER BY s.name
+        """
+        
+        params = matrix_names + [len(matrix_names)]
+        results = self.manager.db.execute_query(query, params)
+        
+        filtered_shells = []
+        for row in results:
+            shell_data = self.get_shell_by_name(row['name'])
+            if shell_data:
+                filtered_shells.append(shell_data)
+        
+        return filtered_shells
+    
+    def filter_shells_by_matrix_any(self, matrix_names):
+        """Filter shells that support ANY of the specified matrix effects"""
+        if not matrix_names:
+            return self.get_all_shells()
+        
+        placeholders = ','.join('?' * len(matrix_names))
+        query = f"""
+            SELECT DISTINCT s.name,
+                   COUNT(DISTINCT me.name) as matching_matrices
+            FROM shells s
+            JOIN shell_matrix_compatibility smc ON s.id = smc.shell_id
+            JOIN matrix_effects me ON smc.matrix_id = me.id
+            WHERE me.name IN ({placeholders})
+            GROUP BY s.id, s.name
+            ORDER BY matching_matrices DESC, s.name
+        """
+        
+        results = self.manager.db.execute_query(query, matrix_names)
+        
+        filtered_shells = []
+        for row in results:
+            shell_data = self.get_shell_by_name(row['name'])
+            if shell_data:
+                shell_data['matching_matrices_count'] = row['matching_matrices']
+                filtered_shells.append(shell_data)
+        
+        return filtered_shells
+    
+    def filter_shells_combined(self, matrix_names=None, shell_class=None, rarity=None, filter_mode='all'):
+        """Filter shells by multiple criteria"""
+        conditions = []
+        params = []
+        
+        # Base query
+        query = """
+            SELECT DISTINCT s.name, s.class, s.rarity
+            FROM shells s
+        """
+        
+        # Add matrix filtering if specified
+        if matrix_names:
+            placeholders = ','.join('?' * len(matrix_names))
+            query += """
+                JOIN shell_matrix_compatibility smc ON s.id = smc.shell_id
+                JOIN matrix_effects me ON smc.matrix_id = me.id
+            """
+            conditions.append(f"me.name IN ({placeholders})")
+            params.extend(matrix_names)
+        
+        # Add class filter
+        if shell_class and shell_class != "All":
+            conditions.append("s.class = ?")
+            params.append(shell_class)
+        
+        # Add rarity filter
+        if rarity and rarity != "All":
+            conditions.append("s.rarity = ?")
+            params.append(rarity)
+        
+        # Build WHERE clause
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
+        
+        # Add GROUP BY and HAVING for matrix filtering
+        if matrix_names:
+            query += " GROUP BY s.id, s.name, s.class, s.rarity"
+            if filter_mode == 'all':
+                query += f" HAVING COUNT(DISTINCT me.name) = {len(matrix_names)}"
+            # For 'any' mode, no HAVING clause needed
+        
+        query += " ORDER BY s.name"
+        
+        results = self.manager.db.execute_query(query, params)
+        
+        filtered_shells = []
+        for row in results:
+            shell_data = self.get_shell_by_name(row['name'])
+            if shell_data:
+                filtered_shells.append(shell_data)
+        
+        return filtered_shells
+    
+    def get_shell_matrix_compatibility(self, shell_name):
+        """Get matrix compatibility information for a shell"""
+        shell_data = self.get_shell_by_name(shell_name)
+        if shell_data and 'matrix_compatibility' in shell_data:
+            return shell_data['matrix_compatibility']
+        return {}
+    
+    def get_shell_recommendations(self, matrix_effects):
+        """Get shell recommendations based on matrix effects"""
+        return self.manager.shells.get_shell_recommendations(matrix_effects)
+    
+    def get_shell_stats(self):
+        """Get shell statistics from unified database"""
+        stats = self.manager.get_comprehensive_stats()
+        return stats['database']
+    
+    def search_shells(self, name_like=None):
+        """Search shells by name"""
+        if not name_like:
+            return self.get_all_shells()
+        
+        query = """
+            SELECT name FROM shells 
+            WHERE name LIKE ? 
+            ORDER BY name
+        """
+        results = self.manager.db.execute_query(query, (f'%{name_like}%',))
+        
+        filtered_shells = []
+        for row in results:
+            shell_data = self.get_shell_by_name(row['name'])
+            if shell_data:
+                filtered_shells.append(shell_data)
+        
+        return filtered_shells
 
 
 class AppState:

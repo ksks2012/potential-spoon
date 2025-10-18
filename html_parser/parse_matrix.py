@@ -9,15 +9,28 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(current_dir)
 sys.path.insert(0, parent_dir)
 
-from db.matrix_db import MatrixDatabase
+try:
+    from db.etheria_manager import EtheriaManager
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Database modules not available: {e}")
+    print("Running in JSON-only mode")
+    DATABASE_AVAILABLE = False
 
 
 class MatrixEffectsParser:
-    def __init__(self, html_file_path):
+    def __init__(self, html_file_path, use_database=True, db_path="./db/etheria.db"):
         """Initialize parser with HTML file path as parameter"""
         self.html_file = html_file_path
         self.soup = None
         self.matrix_effects = []
+        self.use_database = use_database and DATABASE_AVAILABLE
+        
+        if self.use_database:
+            # Initialize unified database manager
+            self.db_manager = EtheriaManager(db_path)
+        else:
+            self.db_manager = None
     
     def parse_effect_text(self, effect_text):
         """Parse effect text to extract stat bonuses and extra effects"""
@@ -178,31 +191,50 @@ class MatrixEffectsParser:
         self.matrix_effects = matrix_effects
         return matrix_effects
     
-    def save_to_database(self, db_path=None):
-        """Save extracted data to SQLite database"""
+    def save_to_database(self, validate_order=True):
+        """Save extracted data to unified database
+        
+        Args:
+            validate_order: If True, ensures this is called first in parsing order
+        """
+        if not self.use_database:
+            print("Database mode not enabled")
+            return False
+        
+        if validate_order:
+            # Check if any shells or characters exist (should be empty when matrices are inserted first)
+            stats = self.db_manager.get_comprehensive_stats()
+            if stats['database']['total_shells'] > 0 or stats['database']['total_characters'] > 0:
+                print("⚠️  Warning: Shells or characters already exist. Matrix effects should be inserted first.")
+        
         try:
-            if db_path:
-                db = MatrixDatabase(db_path)
-            else:
-                db = MatrixDatabase()
-            
-            # Clear existing data
-            db.clear_all_data()
-            print("Cleared existing matrix effects data")
-            
-            # Insert all matrix effects
+            # Insert all matrix effects using unified database
             inserted_count = 0
+            failed_count = 0
+            
             for matrix_data in self.matrix_effects:
-                matrix_id = db.insert_matrix_effect(matrix_data)
+                matrix_id = self.db_manager.matrices.insert_matrix_effect(matrix_data)
                 if matrix_id:
                     inserted_count += 1
-                    print(f"Inserted: {matrix_data['name']} (ID: {matrix_id})")
+                    print(f"✅ Inserted matrix: {matrix_data['name']} (ID: {matrix_id})")
+                else:
+                    failed_count += 1
+                    print(f"❌ Failed to insert matrix: {matrix_data['name']}")
             
-            print(f"Matrix effects data saved to database: {inserted_count} effects inserted")
-            return db
+            print(f"\n=== Matrix Database Save Summary ===")
+            print(f"Matrix effects saved to database: {inserted_count}")
+            print(f"Failed insertions: {failed_count}")
+            
+            # Show database statistics
+            stats = self.db_manager.get_comprehensive_stats()
+            print(f"Database now contains {stats['database']['total_matrix_effects']} matrix effects")
+            
+            return inserted_count > 0
+            
+            return inserted_count > 0
         except Exception as e:
             print(f"Error saving to database: {e}")
-            return None
+            return False
     
     def save_to_json(self, output_file):
         """Save extracted data to JSON file (backup option)"""
