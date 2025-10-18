@@ -14,7 +14,7 @@ windowing_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(project_root)
 sys.path.append(windowing_dir)
 
-from windowing.models import CharacterModel, MathicModel, AppState
+from windowing.models import CharacterModel, MathicModel, ShellModel, AppState
 from windowing.views import MainView
 from windowing.controllers import ApplicationController
 
@@ -30,6 +30,7 @@ class EtheriaApplication:
         self.models = {
             'character': CharacterModel(),
             'mathic': MathicModel(),
+            'shell': ShellModel(),
         }
         
         # Initialize app state
