@@ -860,6 +860,9 @@ class EnhanceSimulatorView(BaseView):
         self.current_module_text.config(state=tk.NORMAL)
         self.current_module_text.delete(1.0, tk.END)
         
+        # Sync enhancement tracking before display to ensure accuracy
+        module.sync_enhancement_tracking()
+        
         info_text = f"Module: {module.module_type}\n"
         info_text += f"Main Stat: {module.main_stat} ({int(module.main_stat_value)})\n"
         info_text += f"Level: {module.level} (Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})\n"

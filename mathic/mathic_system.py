@@ -103,6 +103,16 @@ class Module:
                 return success
         return False
     
+    def sync_enhancement_tracking(self):
+        """Synchronize total_enhancement_rolls and level based on actual substat rolls used"""
+        # Calculate actual enhancement operations based on substat rolls
+        # Each roll on any substat counts as one enhancement operation
+        actual_enhancement_operations = sum(substat.rolls_used for substat in self.substats)
+        
+        # Cap at max_total_rolls to maintain game balance
+        self.total_enhancement_rolls = min(actual_enhancement_operations, self.max_total_rolls)
+        self.level = self.total_enhancement_rolls
+    
     def calculate_total_stats(self) -> Dict[str, float]:
         """Calculate total stats including main stat and substats"""
         stats = {self.main_stat: self.main_stat_value}
@@ -322,6 +332,11 @@ class MathicSystem:
         """Calculate probability of getting each substat when enhancing"""
         probabilities = {}
         
+        # First check if module can be enhanced at all (total rolls limit)
+        if not module.can_be_enhanced():
+            probabilities["No enhancement possible"] = 1.0
+            return probabilities
+        
         # If module has less than 4 substats, only add new substats (no enhancement of existing ones)
         if len(module.substats) < 4:
             available_stats = self.get_available_substats_for_module(module)
@@ -335,18 +350,16 @@ class MathicSystem:
                 # No available new substats
                 probabilities["No enhancement possible"] = 1.0
         else:
-            # Only existing substats can be enhanced, and only those with rolls < 5
-            enhanceable_substats = []
-            for substat in module.substats:
-                if substat.rolls_used < 5:  # Check if substat can still be enhanced
-                    enhanceable_substats.append(substat)
+            # Use the module's get_enhanceable_substats method which considers both 
+            # individual substat limits and module's total roll limit
+            enhanceable_substats = module.get_enhanceable_substats()
             
             if enhanceable_substats:
                 prob_per_stat = 1.0 / len(enhanceable_substats)
                 for substat in enhanceable_substats:
                     probabilities[substat.stat_name] = prob_per_stat
             else:
-                # All substats are at max rolls (5)
+                # No substats can be enhanced (either all at max rolls or total limit reached)
                 probabilities["No enhancement possible"] = 1.0
         
         return probabilities
