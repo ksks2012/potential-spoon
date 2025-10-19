@@ -322,45 +322,71 @@ class MathicSystem:
         """Calculate probability of getting each substat when enhancing"""
         probabilities = {}
         
-        # If module has less than 4 substats, there's a chance to get new ones
+        # If module has less than 4 substats, only add new substats (no enhancement of existing ones)
         if len(module.substats) < 4:
             available_stats = self.get_available_substats_for_module(module)
-            # Probability of getting a new substat = 1 / (existing_enhanceable + available_new)
-            enhanceable_count = len(module.get_enhanceable_substats())
-            total_options = enhanceable_count + len(available_stats)
             
-            if total_options > 0:
-                new_substat_prob = len(available_stats) / total_options
-                existing_substat_prob = enhanceable_count / total_options
-                
-                # Distribute probability among new substats
-                if available_stats:
-                    for stat in available_stats:
-                        probabilities[f"New: {stat}"] = new_substat_prob / len(available_stats)
-                
-                # Distribute probability among existing substats
-                enhanceable_substats = module.get_enhanceable_substats()
-                if enhanceable_substats:
-                    for substat in enhanceable_substats:
-                        probabilities[substat.stat_name] = existing_substat_prob / len(enhanceable_substats)
+            if available_stats:
+                # Only new substats can be added, each with equal probability
+                prob_per_new_stat = 1.0 / len(available_stats)
+                for stat in available_stats:
+                    probabilities[f"New: {stat}"] = prob_per_new_stat
+            else:
+                # No available new substats
+                probabilities["No enhancement possible"] = 1.0
         else:
-            # Only existing substats can be enhanced
-            enhanceable_substats = module.get_enhanceable_substats()
+            # Only existing substats can be enhanced, and only those with rolls < 5
+            enhanceable_substats = []
+            for substat in module.substats:
+                if substat.rolls_used < 5:  # Check if substat can still be enhanced
+                    enhanceable_substats.append(substat)
+            
             if enhanceable_substats:
                 prob_per_stat = 1.0 / len(enhanceable_substats)
                 for substat in enhanceable_substats:
                     probabilities[substat.stat_name] = prob_per_stat
+            else:
+                # All substats are at max rolls (5)
+                probabilities["No enhancement possible"] = 1.0
         
         return probabilities
     
     def calculate_module_value(self, module: Module) -> Dict[str, Any]:
-        """Calculate module value based on substats and rolls"""
+        """Calculate module value based on substats and rolls with categorized scoring"""
         if not module or not module.substats:
-            return {"total_value": 0.0, "efficiency": 0.0, "details": {}}
+            return {
+                "total_value": 0.0, 
+                "efficiency": 0.0, 
+                "details": {},
+                "defense_score": 0.0,
+                "support_score": 0.0,
+                "offense_score": 0.0
+            }
+        
+        # Define stat categories and their weights (% stats have higher weight)
+        stat_categories = {
+            # Defense stats: HP, HP%, DEF, DEF%, Effect RES
+            "defense": {
+                "HP": 1.0, "HP%": 1.5, "DEF": 1.0, "DEF%": 1.5, "Effect RES": 1.2
+            },
+            # Support stats: SPD, Effect ACC, Effect RES  
+            "support": {
+                "SPD": 1.3, "Effect ACC": 1.2, "Effect RES": 1.2
+            },
+            # Offense stats: ATK, ATK%, CRIT Rate, CRIT DMG, SPD
+            "offense": {
+                "ATK": 1.0, "ATK%": 1.5, "CRIT Rate": 1.4, "CRIT DMG": 1.4, "SPD": 1.3
+            }
+        }
         
         total_value = 0.0
         total_max_value = 0.0
         details = {}
+        
+        # Category scores
+        defense_score = 0.0
+        support_score = 0.0
+        offense_score = 0.0
         
         for substat in module.substats:
             if substat.stat_name in self.config["substats"]:
@@ -368,21 +394,40 @@ class MathicSystem:
                 max_possible = stat_config["max_value"]
                 current_efficiency = substat.get_efficiency_percentage(max_possible)
                 
-                # Value calculation: efficiency * importance weight * roll utilization
-                importance_weight = stat_config.get("importance", 1.0)  # Default importance 1.0
+                # Determine category and weight for this stat
+                category_weight = 1.0
+                category_type = "general"
+                
+                for category, stats_dict in stat_categories.items():
+                    if substat.stat_name in stats_dict:
+                        category_weight = stats_dict[substat.stat_name]
+                        category_type = category
+                        break
+                
+                # Value calculation: efficiency * category weight * roll utilization
                 roll_utilization = substat.rolls_used / substat.max_rolls if substat.max_rolls > 0 else 0
                 
-                substat_value = (current_efficiency / 100) * importance_weight * (1 + roll_utilization * 0.5)
+                substat_value = (current_efficiency / 100) * category_weight * (1 + roll_utilization * 0.5)
                 
                 total_value += substat_value
-                total_max_value += importance_weight * 1.5  # Max possible value per substat
+                total_max_value += category_weight * 1.5  # Max possible value per substat
+                
+                # Add to appropriate category score
+                category_score = (current_efficiency / 100) * category_weight
+                if category_type == "defense":
+                    defense_score += category_score
+                elif category_type == "support":
+                    support_score += category_score
+                elif category_type == "offense":
+                    offense_score += category_score
                 
                 details[substat.stat_name] = {
                     "current_value": substat.current_value,
                     "efficiency": current_efficiency,
                     "rolls_used": substat.rolls_used,
                     "substat_value": substat_value,
-                    "importance": importance_weight
+                    "category_weight": category_weight,
+                    "category_type": category_type
                 }
         
         overall_efficiency = (total_value / total_max_value * 100) if total_max_value > 0 else 0
@@ -391,7 +436,10 @@ class MathicSystem:
             "total_value": total_value,
             "efficiency": overall_efficiency,
             "roll_efficiency": module.total_enhancement_rolls / module.max_total_rolls * 100,
-            "details": details
+            "details": details,
+            "defense_score": defense_score,
+            "support_score": support_score,
+            "offense_score": offense_score
         }
     
     def create_mathic_loadout(self, loadout_name: str) -> Dict[int, Optional[str]]:

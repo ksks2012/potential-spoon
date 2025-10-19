@@ -893,28 +893,59 @@ class EnhanceSimulatorView(BaseView):
                                         values=("0.0%",))
     
     def update_value_analysis_display(self, value_data):
-        """Update module value analysis display"""
+        """Update module value analysis display with categorized scoring"""
         self.value_analysis_text.config(state=tk.NORMAL)
         self.value_analysis_text.delete(1.0, tk.END)
         
         analysis_text = "MODULE VALUE ANALYSIS\n"
         analysis_text += "="*30 + "\n\n"
         
+        # Overall scores
         analysis_text += f"Total Value Score: {value_data['total_value']:.2f}\n"
         analysis_text += f"Overall Efficiency: {value_data['efficiency']:.1f}%\n"
         analysis_text += f"Roll Efficiency: {value_data['roll_efficiency']:.1f}%\n\n"
         
+        # Category scores
+        analysis_text += "CATEGORY SCORES\n"
+        analysis_text += "-" * 20 + "\n"
+        analysis_text += f"Defense Score:  {value_data.get('defense_score', 0):.2f}\n"
+        analysis_text += f"Support Score:  {value_data.get('support_score', 0):.2f}\n"
+        analysis_text += f"Offense Score:  {value_data.get('offense_score', 0):.2f}\n\n"
+        
+        # Determine primary category
+        scores = {
+            'Defense': value_data.get('defense_score', 0),
+            'Support': value_data.get('support_score', 0),
+            'Offense': value_data.get('offense_score', 0)
+        }
+        primary_category = max(scores, key=scores.get) if max(scores.values()) > 0 else "General"
+        analysis_text += f"Primary Focus: {primary_category}\n\n"
+        
         if value_data.get('details'):
-            analysis_text += "Substat Breakdown:\n"
+            analysis_text += "SUBSTAT BREAKDOWN\n"
             analysis_text += "-" * 20 + "\n"
             
+            # Group substats by category for better display
+            categories = {"defense": [], "support": [], "offense": [], "general": []}
+            
             for stat_name, details in value_data['details'].items():
-                analysis_text += f"{stat_name}:\n"
-                analysis_text += f"  Value: {int(details['current_value'])}\n"
-                analysis_text += f"  Efficiency: {details['efficiency']:.1f}%\n"
-                analysis_text += f"  Rolls: {details['rolls_used']}/5\n"
-                analysis_text += f"  Score: {details['substat_value']:.2f}\n"
-                analysis_text += f"  Importance: {details['importance']:.1f}\n\n"
+                category = details.get('category_type', 'general')
+                categories[category].append((stat_name, details))
+            
+            # Display each category
+            category_names = {"defense": "Defense Stats", "support": "Support Stats", 
+                            "offense": "Offense Stats", "general": "Other Stats"}
+            
+            for category, stats in categories.items():
+                if stats:
+                    analysis_text += f"\n{category_names[category]}:\n"
+                    for stat_name, details in stats:
+                        analysis_text += f"  {stat_name}:\n"
+                        analysis_text += f"    Value: {int(details['current_value'])}\n"
+                        analysis_text += f"    Efficiency: {details['efficiency']:.1f}%\n"
+                        analysis_text += f"    Rolls: {details['rolls_used']}/5\n"
+                        analysis_text += f"    Score: {details['substat_value']:.2f}\n"
+                        analysis_text += f"    Weight: {details['category_weight']:.1f}x\n"
         
         self.value_analysis_text.insert(1.0, analysis_text)
         self.value_analysis_text.config(state=tk.DISABLED)
