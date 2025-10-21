@@ -369,6 +369,9 @@ class ModuleEditorController(BaseController):
             self.view.main_stat_var.set(main_stat_options[0])
             self.on_main_stat_change()
         
+        # Update matrix options based on module type
+        self.update_matrix_options()
+        
         # Update substat options
         self.update_substat_options()
     
@@ -392,6 +395,42 @@ class ModuleEditorController(BaseController):
         
         available_stats = self.model.get_available_substats(exclude_main_stat=main_stat)
         self.view.update_substat_options(available_stats)
+    
+    def update_matrix_options(self):
+        """Update matrix options based on module type"""
+        form_data = self.view.get_module_form_data()
+        module_type = form_data['module_type']
+        
+        # Get available matrices for this module type
+        available_matrices = self.model.get_available_matrices_for_module(module_type)
+        
+        # Add empty option for no matrix
+        matrix_options = [""] + available_matrices
+        self.view.update_matrix_options(matrix_options)
+    
+    def on_matrix_change(self):
+        """Handle matrix selection change"""
+        # This can be extended if needed for validation or other logic
+        pass
+    
+    def on_matrix_count_change(self):
+        """Handle matrix count change"""
+        try:
+            matrix_info = self.view.get_matrix_info()
+            count = matrix_info['matrix_count']
+            
+            # Validate count range
+            if count < 1:
+                self.view.matrix_count_var.set("1")
+            elif count > 3:
+                self.view.matrix_count_var.set("3")
+        except ValueError:
+            self.view.matrix_count_var.set("3")
+    
+    def clear_matrix(self):
+        """Clear matrix selection"""
+        self.view.matrix_var.set("")
+        self.view.matrix_count_var.set("3")
     
     def on_substat_type_change(self, substat_index):
         """Handle substat type change - update value options and total rolls"""
@@ -508,6 +547,22 @@ class ModuleEditorController(BaseController):
         
         try:
             form_data = self.view.get_module_form_data()
+            matrix_info = self.view.get_matrix_info()
+            
+            # Apply matrix changes if matrix is selected
+            if matrix_info['matrix']:
+                success, message = self.model.set_module_matrix(
+                    module_id,
+                    matrix_info['matrix'],
+                    matrix_info['matrix_count']
+                )
+                if not success:
+                    messagebox.showerror("Matrix Error", message)
+                    return
+            else:
+                # Clear matrix if none selected
+                self.model.clear_module_matrix(module_id)
+            
             success, message = self.model.update_module(
                 module_id,
                 main_stat_value=form_data['main_stat_value'],

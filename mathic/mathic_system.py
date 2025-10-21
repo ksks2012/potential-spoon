@@ -45,6 +45,8 @@ class Module:
     main_stat_value: float = 0.0
     substats: List[Substat] = None
     set_tag: str = ""  # For future set effects
+    matrix: str = ""  # Matrix type (e.g., "Brainfoam", "Evolguard")
+    matrix_count: int = 3  # Number of matrices (1-3, default 3)
     total_enhancement_rolls: int = 0  # Track total rolls across all substats
     max_total_rolls: int = 5  # Maximum total rolls for the entire module
     
@@ -189,6 +191,8 @@ class MathicSystem:
             level=0,
             main_stat=main_stat,
             main_stat_value=max_main_stat_value,
+            matrix="",  # Default empty matrix
+            matrix_count=3,  # Default matrix count
             set_tag=set_tag
         )
         
@@ -327,6 +331,65 @@ class MathicSystem:
                 available_stats.remove(stat)
         
         return available_stats
+    
+    def get_module_by_id(self, module_id: str) -> Optional[Module]:
+        """Get module by its ID"""
+        return self.modules.get(module_id)
+    
+    def get_all_modules(self) -> Dict[str, Module]:
+        """Get all modules"""
+        return self.modules.copy()
+    
+    def get_available_matrices_for_module(self, module_or_type) -> List[str]:
+        """Get available matrices that can be assigned to a module"""
+        available_matrices = []
+        
+        # Handle both string module_type and Module object
+        if isinstance(module_or_type, str):
+            module_type = module_or_type
+        else:
+            module_type = module_or_type.module_type
+        
+        # Get common matrices (available for all module types)
+        common_matrices = self.config.get("matrices", {}).get("common", [])
+        available_matrices.extend(common_matrices)
+        
+        # Add core-exclusive matrices only if module is a core
+        if module_type == "core":
+            core_exclusive = self.config.get("matrices", {}).get("core_exclusive", [])
+            available_matrices.extend(core_exclusive)
+        
+        return available_matrices
+    
+    def set_module_matrix(self, module_id: str, matrix_name: str, matrix_count: int = 3) -> tuple[bool, str]:
+        """Set matrix for a module"""
+        module = self.get_module_by_id(module_id)
+        if not module:
+            return False, f"Module with ID '{module_id}' not found"
+        
+        # Validate matrix count (1-3)
+        if matrix_count < 1 or matrix_count > 3:
+            return False, f"Invalid matrix count: {matrix_count}. Must be between 1 and 3."
+        
+        # Validate matrix name
+        available_matrices = self.get_available_matrices_for_module(module)
+        if matrix_name and matrix_name not in available_matrices:
+            return False, f"Matrix '{matrix_name}' is not available for module type '{module.module_type}'"
+        
+        # Set matrix
+        module.matrix = matrix_name
+        module.matrix_count = matrix_count
+        return True, f"Matrix '{matrix_name}' set successfully with count {matrix_count}"
+    
+    def clear_module_matrix(self, module_id: str) -> bool:
+        """Clear matrix from a module"""
+        module = self.get_module_by_id(module_id)
+        if not module:
+            return False
+        
+        module.matrix = ""
+        module.matrix_count = 3  # Reset to default
+        return True
     
     def calculate_substat_probabilities(self, module: Module) -> Dict[str, float]:
         """Calculate probability of getting each substat when enhancing"""

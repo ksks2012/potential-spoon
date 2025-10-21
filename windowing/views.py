@@ -396,6 +396,10 @@ class ModuleEditorView(BaseView):
         self.main_stat_value_var = tk.StringVar()
         self.total_rolls_var = tk.StringVar(value="0")
         
+        # Matrix variables
+        self.matrix_var = tk.StringVar()
+        self.matrix_count_var = tk.StringVar(value="3")
+        
         # Substat variables
         self._create_substat_vars()
         
@@ -496,6 +500,7 @@ class ModuleEditorView(BaseView):
         type_frame = ttk.Frame(parent)
         type_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         
+        # Module type and main stat row
         ttk.Label(type_frame, text="Type:").grid(row=0, column=0, padx=(0, 5))
         self.module_type_combo = ttk.Combobox(type_frame, textvariable=self.module_type_var,
                                             values=["mask", "transistor", "wristwheel", "core"],
@@ -515,6 +520,27 @@ class ModuleEditorView(BaseView):
         self.main_stat_entry = ttk.Entry(type_frame, textvariable=self.main_stat_value_var, 
                                        width=8, state="readonly")
         self.main_stat_entry.grid(row=0, column=5)
+        
+        # Matrix row
+        ttk.Label(type_frame, text="Matrix:").grid(row=1, column=0, padx=(0, 5), pady=(10, 0))
+        self.matrix_combo = ttk.Combobox(type_frame, textvariable=self.matrix_var,
+                                       state="readonly", width=20)
+        self.matrix_combo.grid(row=1, column=1, columnspan=2, padx=(0, 10), pady=(10, 0), sticky=(tk.W,))
+        self.matrix_combo.bind('<<ComboboxSelected>>', 
+                              lambda e: self.controller.on_matrix_change() if self.controller else None)
+        
+        ttk.Label(type_frame, text="Count:").grid(row=1, column=3, padx=(0, 5), pady=(10, 0))
+        self.matrix_count_spinbox = ttk.Spinbox(type_frame, textvariable=self.matrix_count_var, 
+                                              from_=1, to=3, width=5)
+        self.matrix_count_spinbox.grid(row=1, column=4, pady=(10, 0))
+        self.matrix_count_spinbox.bind('<KeyRelease>', 
+                                     lambda e: self.controller.on_matrix_count_change() if self.controller else None)
+        self.matrix_count_spinbox.bind('<Button-1>', 
+                                     lambda e: self.controller.on_matrix_count_change() if self.controller else None)
+        
+        # Clear matrix button
+        ttk.Button(type_frame, text="Clear", 
+                  command=lambda: self.controller.clear_matrix() if self.controller else None).grid(row=1, column=5, padx=(5, 0), pady=(10, 0))
     
     def _create_substats_display(self, parent):
         """Create substats display tree"""
@@ -630,6 +656,10 @@ class ModuleEditorView(BaseView):
         self.main_stat_var.set(module.main_stat)
         self.main_stat_value_var.set(str(module.main_stat_value))
         
+        # Update matrix info
+        self.matrix_var.set(module.matrix if hasattr(module, 'matrix') else "")
+        self.matrix_count_var.set(str(module.matrix_count) if hasattr(module, 'matrix_count') else "3")
+        
         # Update substats tree
         for item in self.substats_tree.get_children():
             self.substats_tree.delete(item)
@@ -681,6 +711,17 @@ class ModuleEditorView(BaseView):
         if 0 <= substat_index - 1 < len(self.substat_controls):
             _, value_combo, _, _, _, _ = self.substat_controls[substat_index - 1]
             value_combo.configure(values=options)
+    
+    def update_matrix_options(self, options):
+        """Update matrix combo options"""
+        self.matrix_combo.configure(values=options)
+    
+    def get_matrix_info(self):
+        """Get current matrix info"""
+        return {
+            'matrix': self.matrix_var.get(),
+            'matrix_count': int(self.matrix_count_var.get()) if self.matrix_count_var.get().isdigit() else 3
+        }
     
     def update_total_rolls_display(self):
         """Update total rolls display"""

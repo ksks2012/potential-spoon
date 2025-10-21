@@ -304,6 +304,18 @@ class MathicModel:
         
         return []
     
+    def get_available_matrices_for_module(self, module_type):
+        """Get available matrices for a specific module type"""
+        return self.mathic_system.get_available_matrices_for_module(module_type)
+    
+    def set_module_matrix(self, module_id, matrix_name, matrix_count=3):
+        """Set matrix for a module"""
+        return self.mathic_system.set_module_matrix(module_id, matrix_name, matrix_count)
+    
+    def clear_module_matrix(self, module_id):
+        """Clear matrix from a module"""
+        return self.mathic_system.clear_module_matrix(module_id)
+    
     def validate_total_rolls(self, substats_data):
         """Validate that total rolls don't exceed 5"""
         total_rolls = sum(data.get('rolls', 0) for data in substats_data if data.get('stat_name'))
