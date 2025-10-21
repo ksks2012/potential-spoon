@@ -643,7 +643,7 @@ class ModuleEditorView(BaseView):
         """Update module list display"""
         self.module_listbox.delete(0, tk.END)
         for module_id, module in modules.items():
-            display_text = f"{module.module_type} - {module.main_stat} ({module.level})"
+            display_text = f"{module.module_type} - {module.main_stat} ({module.level}) - {module.matrix} ({"" if module.matrix == "" else module.matrix_count})"
             self.module_listbox.insert(tk.END, display_text)
     
     def update_module_details(self, module):
