@@ -356,17 +356,23 @@ class ModuleEditorController(BaseController):
                 self.view.update_module_details(module)
                 self.app_state.set_current_module(module_id)
     
-    def on_module_type_change(self):
+    def on_module_type_change(self, preserve_current_values=False):
         """Handle module type change"""
         form_data = self.view.get_module_form_data()
         module_type = form_data['module_type']
+        current_main_stat = form_data['main_stat']
         
         # Update main stat options
         main_stat_options = self.model.get_available_main_stats(module_type)
         self.view.update_main_stat_options(main_stat_options)
         
-        if main_stat_options:
-            self.view.main_stat_var.set(main_stat_options[0])
+        # Only set default if not preserving current values or current value is invalid
+        if not preserve_current_values or current_main_stat not in main_stat_options:
+            if main_stat_options:
+                self.view.main_stat_var.set(main_stat_options[0])
+                self.on_main_stat_change()
+        else:
+            # If preserving and current value is valid, trigger change to update dependent fields
             self.on_main_stat_change()
         
         # Update matrix options based on module type

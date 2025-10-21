@@ -656,6 +656,10 @@ class ModuleEditorView(BaseView):
         self.main_stat_var.set(module.main_stat)
         self.main_stat_value_var.set(str(module.main_stat_value))
         
+        # Trigger module type change to update options while preserving current values
+        if self.controller:
+            self.controller.on_module_type_change(preserve_current_values=True)
+        
         # Update matrix info
         self.matrix_var.set(module.matrix if hasattr(module, 'matrix') else "")
         self.matrix_count_var.set(str(module.matrix_count) if hasattr(module, 'matrix_count') else "3")
