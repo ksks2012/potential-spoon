@@ -157,17 +157,13 @@ class MathicModel:
     
     def delete_module(self, module_id):
         """Delete a module"""
-        if module_id in self.mathic_system.modules:
-            del self.mathic_system.modules[module_id]
-            return True
-        return False
+        return self.mathic_system.delete_module(module_id)
     
     def update_module(self, module_id, main_stat_value=None, substats_data=None):
         """Update module with new data"""
-        if module_id not in self.mathic_system.modules:
+        module = self.mathic_system.get_module_by_id(module_id)
+        if not module:
             return False, "Module not found"
-        
-        module = self.mathic_system.modules[module_id]
         
         try:
             # Update main stat value if provided
@@ -178,6 +174,7 @@ class MathicModel:
             if substats_data:
                 from mathic.mathic_system import Substat
                 module.substats = []
+                module.total_enhancement_rolls = 0  # Reset roll count
                 for substat_data in substats_data:
                     if substat_data['stat_name']:
                         substat = Substat(
@@ -186,18 +183,24 @@ class MathicModel:
                             rolls_used=substat_data['rolls_used']
                         )
                         module.substats.append(substat)
+                        module.total_enhancement_rolls += substat_data['rolls_used']
             
-            return True, "Module updated successfully"
+            # Save changes to database
+            if self.mathic_system.db.save_module(module):
+                return True, "Module updated successfully"
+            else:
+                return False, "Failed to save module to database"
             
         except Exception as e:
             return False, f"Update failed: {str(e)}"
     
     def enhance_module_random(self, module_id):
         """Randomly enhance a module"""
-        if module_id not in self.mathic_system.modules:
+        module = self.mathic_system.get_module_by_id(module_id)
+        if not module:
             return None
         
-        module = self.mathic_system.modules[module_id]
+        return self.mathic_system.enhance_module_random_substat(module)
         return self.mathic_system.enhance_module_random_substat(module)
     
     def enhance_module_multiple(self, module_id, times):
@@ -268,9 +271,17 @@ class MathicModel:
             return self.mathic_system.config["module_types"][module_type]["max_main_stats"][main_stat]
         return 0
     
-    def get_available_substats(self, exclude_main_stat=None):
+    def get_available_substats(self, exclude_main_stat=None, module_type=None):
         """Get available substat options"""
         available_stats = list(self.mathic_system.config.get("substats", {}).keys())
+        
+        # Remove restricted substats for this module type
+        if module_type:
+            module_type_config = self.mathic_system.config.get("module_types", {}).get(module_type, {})
+            restricted_substats = module_type_config.get("restricted_substats", [])
+            for restricted_stat in restricted_substats:
+                if restricted_stat in available_stats:
+                    available_stats.remove(restricted_stat)
         
         if exclude_main_stat and exclude_main_stat in available_stats:
             available_stats.remove(exclude_main_stat)
@@ -303,6 +314,18 @@ class MathicModel:
             return possible_values
         
         return []
+    
+    def get_available_matrices_for_module(self, module_type):
+        """Get available matrices for a specific module type"""
+        return self.mathic_system.get_available_matrices_for_module(module_type)
+    
+    def set_module_matrix(self, module_id, matrix_name, matrix_count=3):
+        """Set matrix for a module"""
+        return self.mathic_system.set_module_matrix(module_id, matrix_name, matrix_count)
+    
+    def clear_module_matrix(self, module_id):
+        """Clear matrix from a module"""
+        return self.mathic_system.clear_module_matrix(module_id)
     
     def validate_total_rolls(self, substats_data):
         """Validate that total rolls don't exceed 5"""

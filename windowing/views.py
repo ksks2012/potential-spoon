@@ -396,6 +396,10 @@ class ModuleEditorView(BaseView):
         self.main_stat_value_var = tk.StringVar()
         self.total_rolls_var = tk.StringVar(value="0")
         
+        # Matrix variables
+        self.matrix_var = tk.StringVar()
+        self.matrix_count_var = tk.StringVar(value="3")
+        
         # Substat variables
         self._create_substat_vars()
         
@@ -496,6 +500,7 @@ class ModuleEditorView(BaseView):
         type_frame = ttk.Frame(parent)
         type_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         
+        # Module type and main stat row
         ttk.Label(type_frame, text="Type:").grid(row=0, column=0, padx=(0, 5))
         self.module_type_combo = ttk.Combobox(type_frame, textvariable=self.module_type_var,
                                             values=["mask", "transistor", "wristwheel", "core"],
@@ -515,6 +520,27 @@ class ModuleEditorView(BaseView):
         self.main_stat_entry = ttk.Entry(type_frame, textvariable=self.main_stat_value_var, 
                                        width=8, state="readonly")
         self.main_stat_entry.grid(row=0, column=5)
+        
+        # Matrix row
+        ttk.Label(type_frame, text="Matrix:").grid(row=1, column=0, padx=(0, 5), pady=(10, 0))
+        self.matrix_combo = ttk.Combobox(type_frame, textvariable=self.matrix_var,
+                                       state="readonly", width=20)
+        self.matrix_combo.grid(row=1, column=1, columnspan=2, padx=(0, 10), pady=(10, 0), sticky=(tk.W,))
+        self.matrix_combo.bind('<<ComboboxSelected>>', 
+                              lambda e: self.controller.on_matrix_change() if self.controller else None)
+        
+        ttk.Label(type_frame, text="Count:").grid(row=1, column=3, padx=(0, 5), pady=(10, 0))
+        self.matrix_count_spinbox = ttk.Spinbox(type_frame, textvariable=self.matrix_count_var, 
+                                              from_=1, to=3, width=5)
+        self.matrix_count_spinbox.grid(row=1, column=4, pady=(10, 0))
+        self.matrix_count_spinbox.bind('<KeyRelease>', 
+                                     lambda e: self.controller.on_matrix_count_change() if self.controller else None)
+        self.matrix_count_spinbox.bind('<Button-1>', 
+                                     lambda e: self.controller.on_matrix_count_change() if self.controller else None)
+        
+        # Clear matrix button
+        ttk.Button(type_frame, text="Clear", 
+                  command=lambda: self.controller.clear_matrix() if self.controller else None).grid(row=1, column=5, padx=(5, 0), pady=(10, 0))
     
     def _create_substats_display(self, parent):
         """Create substats display tree"""
@@ -617,7 +643,7 @@ class ModuleEditorView(BaseView):
         """Update module list display"""
         self.module_listbox.delete(0, tk.END)
         for module_id, module in modules.items():
-            display_text = f"{module.module_type} - {module.main_stat} ({module.level})"
+            display_text = f"{module.module_type} - {module.main_stat} ({module.level}) - {module.matrix} ({"" if module.matrix == "" else module.matrix_count})"
             self.module_listbox.insert(tk.END, display_text)
     
     def update_module_details(self, module):
@@ -629,6 +655,14 @@ class ModuleEditorView(BaseView):
         self.module_type_var.set(module.module_type)
         self.main_stat_var.set(module.main_stat)
         self.main_stat_value_var.set(str(module.main_stat_value))
+        
+        # Trigger module type change to update options while preserving current values
+        if self.controller:
+            self.controller.on_module_type_change(preserve_current_values=True)
+        
+        # Update matrix info
+        self.matrix_var.set(module.matrix if hasattr(module, 'matrix') else "")
+        self.matrix_count_var.set(str(module.matrix_count) if hasattr(module, 'matrix_count') else "3")
         
         # Update substats tree
         for item in self.substats_tree.get_children():
@@ -681,6 +715,17 @@ class ModuleEditorView(BaseView):
         if 0 <= substat_index - 1 < len(self.substat_controls):
             _, value_combo, _, _, _, _ = self.substat_controls[substat_index - 1]
             value_combo.configure(values=options)
+    
+    def update_matrix_options(self, options):
+        """Update matrix combo options"""
+        self.matrix_combo.configure(values=options)
+    
+    def get_matrix_info(self):
+        """Get current matrix info"""
+        return {
+            'matrix': self.matrix_var.get(),
+            'matrix_count': int(self.matrix_count_var.get()) if self.matrix_count_var.get().isdigit() else 3
+        }
     
     def update_total_rolls_display(self):
         """Update total rolls display"""
@@ -860,6 +905,9 @@ class EnhanceSimulatorView(BaseView):
         self.current_module_text.config(state=tk.NORMAL)
         self.current_module_text.delete(1.0, tk.END)
         
+        # Sync enhancement tracking before display to ensure accuracy
+        module.sync_enhancement_tracking()
+        
         info_text = f"Module: {module.module_type}\n"
         info_text += f"Main Stat: {module.main_stat} ({int(module.main_stat_value)})\n"
         info_text += f"Level: {module.level} (Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})\n"
@@ -893,28 +941,59 @@ class EnhanceSimulatorView(BaseView):
                                         values=("0.0%",))
     
     def update_value_analysis_display(self, value_data):
-        """Update module value analysis display"""
+        """Update module value analysis display with categorized scoring"""
         self.value_analysis_text.config(state=tk.NORMAL)
         self.value_analysis_text.delete(1.0, tk.END)
         
         analysis_text = "MODULE VALUE ANALYSIS\n"
         analysis_text += "="*30 + "\n\n"
         
+        # Overall scores
         analysis_text += f"Total Value Score: {value_data['total_value']:.2f}\n"
         analysis_text += f"Overall Efficiency: {value_data['efficiency']:.1f}%\n"
         analysis_text += f"Roll Efficiency: {value_data['roll_efficiency']:.1f}%\n\n"
         
+        # Category scores
+        analysis_text += "CATEGORY SCORES\n"
+        analysis_text += "-" * 20 + "\n"
+        analysis_text += f"Defense Score:  {value_data.get('defense_score', 0):.2f}\n"
+        analysis_text += f"Support Score:  {value_data.get('support_score', 0):.2f}\n"
+        analysis_text += f"Offense Score:  {value_data.get('offense_score', 0):.2f}\n\n"
+        
+        # Determine primary category
+        scores = {
+            'Defense': value_data.get('defense_score', 0),
+            'Support': value_data.get('support_score', 0),
+            'Offense': value_data.get('offense_score', 0)
+        }
+        primary_category = max(scores, key=scores.get) if max(scores.values()) > 0 else "General"
+        analysis_text += f"Primary Focus: {primary_category}\n\n"
+        
         if value_data.get('details'):
-            analysis_text += "Substat Breakdown:\n"
+            analysis_text += "SUBSTAT BREAKDOWN\n"
             analysis_text += "-" * 20 + "\n"
             
+            # Group substats by category for better display
+            categories = {"defense": [], "support": [], "offense": [], "general": []}
+            
             for stat_name, details in value_data['details'].items():
-                analysis_text += f"{stat_name}:\n"
-                analysis_text += f"  Value: {int(details['current_value'])}\n"
-                analysis_text += f"  Efficiency: {details['efficiency']:.1f}%\n"
-                analysis_text += f"  Rolls: {details['rolls_used']}/5\n"
-                analysis_text += f"  Score: {details['substat_value']:.2f}\n"
-                analysis_text += f"  Importance: {details['importance']:.1f}\n\n"
+                category = details.get('category_type', 'general')
+                categories[category].append((stat_name, details))
+            
+            # Display each category
+            category_names = {"defense": "Defense Stats", "support": "Support Stats", 
+                            "offense": "Offense Stats", "general": "Other Stats"}
+            
+            for category, stats in categories.items():
+                if stats:
+                    analysis_text += f"\n{category_names[category]}:\n"
+                    for stat_name, details in stats:
+                        analysis_text += f"  {stat_name}:\n"
+                        analysis_text += f"    Value: {int(details['current_value'])}\n"
+                        analysis_text += f"    Efficiency: {details['efficiency']:.1f}%\n"
+                        analysis_text += f"    Rolls: {details['rolls_used']}/5\n"
+                        analysis_text += f"    Score: {details['substat_value']:.2f}\n"
+                        analysis_text += f"    Weight: {details['category_weight']:.1f}x\n"
         
         self.value_analysis_text.insert(1.0, analysis_text)
         self.value_analysis_text.config(state=tk.DISABLED)

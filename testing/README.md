@@ -2,25 +2,47 @@
 
 This directory contains all test scripts for the Etheria simulation system.
 
-## Main Test Files
+## Test Files Organization
 
-### Integrated Test Suite
+### Core System Tests
 - `testing_integrated_suite.py` - **Main test file**: Complete system functionality testing
 - `testing_infinite_loop_fix.py` - Specialized infinite loop fix verification testing
 - `testing_final_verification.py` - Module Editor functionality fix final verification
 
-### Shells Parser Testing Suite
+### Mathic System Tests
+- `testing_mathic_probabilities.py` - **Enhanced probability calculations**: Enhancement probabilities and value analysis testing
+- `testing_mathic_gui.py` - Mathic System GUI integration testing
+- `testing_module_sync.py` - Current module display synchronization testing
+- `testing_loadout_manager.py` - Loadout Manager main stat display testing
+
+### Shells & Character Tests
 - `testing_shells_parser_suite.py` - **Complete shells parser test**: Full HTML parsing functionality testing
 - `testing_shell_structure.py` - Shell HTML structure analysis and validation
+- `testing_shell_pokedex.py` - Shell Pokedex functionality testing
+- `testing_shell_images.py` - Shell image loading and display testing
+- `testing_shell_matrix_icons.py` - Shell matrix icons integration testing
+- `testing_character_pokedex.py` - Character Pokedex functionality testing
 - `testing_skills_extraction.py` - Awakened/Non-Awakened skills parsing logic testing
 - `testing_matrix_sets.py` - Matrix sets extraction and image source parsing testing
 
-### Other Files
+### Database & Parser Tests  
+- `testing_unified_database.py` - Unified database system testing
+- `testing_updated_parsers.py` - Updated parsers functionality testing
+- `testing_simple_unified.py` - Simple unified system testing
+
+### Demo Files
 - `demo_mathic.py` - Mathic system demonstration script
 - `demo_matrix_db.py` - Matrix database demonstration script
 - `demo_matrix_parser.py` - Matrix parser demonstration script
+- `demo_shell_images.py` - Shell images demonstration script
+- `demo_shells_db.py` - Shells database demonstration script
+- `demo_unified_system.py` - Unified system demonstration script
+
+### Configuration & Data
 - `mathic_config.json` - Test configuration file
 - `db/` - Test database files
+- `demo_export.json` - Demo export data
+- `shells_test.json` - Shell test data
 
 ## How to Run Tests
 

@@ -45,6 +45,8 @@ class Module:
     main_stat_value: float = 0.0
     substats: List[Substat] = None
     set_tag: str = ""  # For future set effects
+    matrix: str = ""  # Matrix type (e.g., "Brainfoam", "Evolguard")
+    matrix_count: int = 3  # Number of matrices (1-3, default 3)
     total_enhancement_rolls: int = 0  # Track total rolls across all substats
     max_total_rolls: int = 5  # Maximum total rolls for the entire module
     
@@ -103,6 +105,16 @@ class Module:
                 return success
         return False
     
+    def sync_enhancement_tracking(self):
+        """Synchronize total_enhancement_rolls and level based on actual substat rolls used"""
+        # Calculate actual enhancement operations based on substat rolls
+        # Each roll on any substat counts as one enhancement operation
+        actual_enhancement_operations = sum(substat.rolls_used for substat in self.substats)
+        
+        # Cap at max_total_rolls to maintain game balance
+        self.total_enhancement_rolls = min(actual_enhancement_operations, self.max_total_rolls)
+        self.level = self.total_enhancement_rolls
+    
     def calculate_total_stats(self) -> Dict[str, float]:
         """Calculate total stats including main stat and substats"""
         stats = {self.main_stat: self.main_stat_value}
@@ -119,8 +131,8 @@ class Module:
 class MathicSystem:
     """Main system for managing mathic modules"""
     
-    def __init__(self, config_path: str = None):
-        """Initialize the mathic system with configuration"""
+    def __init__(self, config_path: str = None, db_path: str = None):
+        """Initialize the mathic system with configuration and database"""
         if config_path is None:
             # Get absolute path to the mathic directory
             mathic_dir = os.path.dirname(os.path.abspath(__file__))
@@ -128,8 +140,24 @@ class MathicSystem:
         
         self.config_path = config_path
         self.config = self.load_config()
-        self.modules = {}  # module_id -> Module
-        self.mathic_loadouts = {}  # loadout_name -> Dict[slot_id, module_id]
+        
+        # Initialize database
+        from mathic.mathic_database import MathicDatabase
+        self.db = MathicDatabase(db_path)
+        
+        # Load data from database
+        self._modules_cache = {}  # Cache for frequently accessed modules
+        self._loadouts_cache = {}  # Cache for loadouts
+    
+    @property
+    def modules(self) -> Dict[str, Module]:
+        """Get all modules (loaded from database on access)"""
+        return self.db.load_all_modules()
+    
+    @property
+    def mathic_loadouts(self) -> Dict[str, Dict[int, str]]:
+        """Get all loadouts (loaded from database on access)"""
+        return self.db.load_all_loadouts()
     
     def load_config(self) -> Dict:
         """Load configuration from JSON file"""
@@ -166,8 +194,9 @@ class MathicSystem:
             print(f"Invalid main stat {main_stat} for {module_type}")
             return None
         
-        # Generate unique module ID
-        module_id = f"{module_type}_{slot_position}_{len(self.modules)}"
+        # Generate unique module ID based on current database count
+        current_count = self.db.get_module_count()
+        module_id = f"{module_type}_{slot_position}_{current_count}"
         
         # Get max main stat value
         max_main_stat_value = module_config["max_main_stats"][main_stat]
@@ -179,11 +208,17 @@ class MathicSystem:
             level=0,
             main_stat=main_stat,
             main_stat_value=max_main_stat_value,
+            matrix="",  # Default empty matrix
+            matrix_count=3,  # Default matrix count
             set_tag=set_tag
         )
         
-        self.modules[module_id] = module
-        return module
+        # Save to database
+        if self.db.save_module(module):
+            return module
+        else:
+            print(f"Failed to save module {module_id} to database")
+            return None
     
     def generate_random_substats(self, module: Module, count: int = 4) -> bool:
         """Generate random substats for a module"""
@@ -217,6 +252,11 @@ class MathicSystem:
             
             module.add_substat(stat_name, float(initial_value))
         
+        # Save changes to database
+        if not self.db.save_module(module):
+            print(f"Failed to save module {module.module_id} after generating substats")
+            return False
+        
         return True
     
     def enhance_module_random_substat(self, module: Module) -> Optional[str]:
@@ -227,6 +267,8 @@ class MathicSystem:
         # Check if module can be enhanced
         if not module.can_be_enhanced():
             return None
+        
+        result = None
         
         # Check if we need to add a new substat first
         if len(module.substats) < 4:
@@ -241,29 +283,34 @@ class MathicSystem:
                 module.add_substat(stat_name, float(initial_value))
                 module.total_enhancement_rolls += 1
                 module.level += 1
-                return f"New substat: {stat_name}"
+                result = f"New substat: {stat_name}"
+        else:
+            # Get substats that can be enhanced (considering total roll limit)
+            enhanceable_substats = module.get_enhanceable_substats()
+            
+            if not enhanceable_substats:
+                return None
+            
+            # Randomly select a substat to enhance
+            selected_substat = random.choice(enhanceable_substats)
+            
+            # Get roll value
+            stat_config = self.config["substats"][selected_substat.stat_name]
+            roll_range = stat_config["roll_range"]
+            roll_value = random.randint(roll_range[0], roll_range[1])
+            
+            # Enhance the substat with roll tracking
+            success = module.enhance_substat_with_roll_tracking(selected_substat.stat_name, float(roll_value))
+            
+            if success:
+                result = selected_substat.stat_name
         
-        # Get substats that can be enhanced (considering total roll limit)
-        enhanceable_substats = module.get_enhanceable_substats()
+        # Save changes to database
+        if result:
+            if not self.db.save_module(module):
+                print(f"Failed to save module {module.module_id} after enhancement")
         
-        if not enhanceable_substats:
-            return None
-        
-        # Randomly select a substat to enhance
-        selected_substat = random.choice(enhanceable_substats)
-        
-        # Get roll value
-        stat_config = self.config["substats"][selected_substat.stat_name]
-        roll_range = stat_config["roll_range"]
-        roll_value = random.randint(roll_range[0], roll_range[1])
-        
-        # Enhance the substat with roll tracking
-        success = module.enhance_substat_with_roll_tracking(selected_substat.stat_name, float(roll_value))
-        
-        if success:
-            return selected_substat.stat_name
-        
-        return None
+        return result
     
     def enhance_module_specific_substat(self, module: Module, stat_name: str, roll_count: int = 1) -> bool:
         """Enhance a specific substat by a given number of rolls"""
@@ -299,6 +346,13 @@ class MathicSystem:
         """Get available substats that can be added to a module"""
         available_stats = list(self.config.get("substats", {}).keys())
         
+        # Remove restricted substats for this module type
+        module_type_config = self.config.get("module_types", {}).get(module.module_type, {})
+        restricted_substats = module_type_config.get("restricted_substats", [])
+        for restricted_stat in restricted_substats:
+            if restricted_stat in available_stats:
+                available_stats.remove(restricted_stat)
+        
         # Remove main stat
         if module.main_stat in available_stats:
             available_stats.remove(module.main_stat)
@@ -318,49 +372,157 @@ class MathicSystem:
         
         return available_stats
     
+    def get_module_by_id(self, module_id: str) -> Optional[Module]:
+        """Get module by its ID"""
+        # Always load fresh from database to ensure consistency
+        module = self.db.load_module(module_id)
+        if module:
+            self._modules_cache[module_id] = module
+        
+        return module
+    
+    def get_all_modules(self) -> Dict[str, Module]:
+        """Get all modules"""
+        return self.db.load_all_modules()
+    
+    def get_available_matrices_for_module(self, module_or_type) -> List[str]:
+        """Get available matrices that can be assigned to a module"""
+        available_matrices = []
+        
+        # Handle both string module_type and Module object
+        if isinstance(module_or_type, str):
+            module_type = module_or_type
+        else:
+            module_type = module_or_type.module_type
+        
+        # Get common matrices (available for all module types)
+        common_matrices = self.config.get("matrices", {}).get("common", [])
+        available_matrices.extend(common_matrices)
+        
+        # Add core-exclusive matrices only if module is a core
+        if module_type == "core":
+            core_exclusive = self.config.get("matrices", {}).get("core_exclusive", [])
+            available_matrices.extend(core_exclusive)
+        
+        return available_matrices
+    
+    def set_module_matrix(self, module_id: str, matrix_name: str, matrix_count: int = 3) -> tuple[bool, str]:
+        """Set matrix for a module"""
+        module = self.get_module_by_id(module_id)
+        if not module:
+            return False, f"Module with ID '{module_id}' not found"
+        
+        # Validate matrix count (1-3)
+        if matrix_count < 1 or matrix_count > 3:
+            return False, f"Invalid matrix count: {matrix_count}. Must be between 1 and 3."
+        
+        # Validate matrix name
+        available_matrices = self.get_available_matrices_for_module(module)
+        if matrix_name and matrix_name not in available_matrices:
+            return False, f"Matrix '{matrix_name}' is not available for module type '{module.module_type}'"
+        
+        # Set matrix
+        module.matrix = matrix_name
+        module.matrix_count = matrix_count
+        
+        # Save to database
+        if self.db.save_module(module):
+            # Update cache
+            self._modules_cache[module_id] = module
+            return True, f"Matrix '{matrix_name}' set successfully with count {matrix_count}"
+        else:
+            return False, f"Failed to save matrix changes to database"
+    
+    def clear_module_matrix(self, module_id: str) -> bool:
+        """Clear matrix from a module"""
+        module = self.get_module_by_id(module_id)
+        if not module:
+            return False
+        
+        module.matrix = ""
+        module.matrix_count = 3  # Reset to default
+        
+        # Save to database
+        if self.db.save_module(module):
+            # Update cache
+            self._modules_cache[module_id] = module
+            return True
+        else:
+            print(f"Failed to save matrix changes to database for module {module_id}")
+            return False
+    
     def calculate_substat_probabilities(self, module: Module) -> Dict[str, float]:
         """Calculate probability of getting each substat when enhancing"""
         probabilities = {}
         
-        # If module has less than 4 substats, there's a chance to get new ones
+        # First check if module can be enhanced at all (total rolls limit)
+        if not module.can_be_enhanced():
+            probabilities["No enhancement possible"] = 1.0
+            return probabilities
+        
+        # If module has less than 4 substats, only add new substats (no enhancement of existing ones)
         if len(module.substats) < 4:
             available_stats = self.get_available_substats_for_module(module)
-            # Probability of getting a new substat = 1 / (existing_enhanceable + available_new)
-            enhanceable_count = len(module.get_enhanceable_substats())
-            total_options = enhanceable_count + len(available_stats)
             
-            if total_options > 0:
-                new_substat_prob = len(available_stats) / total_options
-                existing_substat_prob = enhanceable_count / total_options
-                
-                # Distribute probability among new substats
-                if available_stats:
-                    for stat in available_stats:
-                        probabilities[f"New: {stat}"] = new_substat_prob / len(available_stats)
-                
-                # Distribute probability among existing substats
-                enhanceable_substats = module.get_enhanceable_substats()
-                if enhanceable_substats:
-                    for substat in enhanceable_substats:
-                        probabilities[substat.stat_name] = existing_substat_prob / len(enhanceable_substats)
+            if available_stats:
+                # Only new substats can be added, each with equal probability
+                prob_per_new_stat = 1.0 / len(available_stats)
+                for stat in available_stats:
+                    probabilities[f"New: {stat}"] = prob_per_new_stat
+            else:
+                # No available new substats
+                probabilities["No enhancement possible"] = 1.0
         else:
-            # Only existing substats can be enhanced
+            # Use the module's get_enhanceable_substats method which considers both 
+            # individual substat limits and module's total roll limit
             enhanceable_substats = module.get_enhanceable_substats()
+            
             if enhanceable_substats:
                 prob_per_stat = 1.0 / len(enhanceable_substats)
                 for substat in enhanceable_substats:
                     probabilities[substat.stat_name] = prob_per_stat
+            else:
+                # No substats can be enhanced (either all at max rolls or total limit reached)
+                probabilities["No enhancement possible"] = 1.0
         
         return probabilities
     
     def calculate_module_value(self, module: Module) -> Dict[str, Any]:
-        """Calculate module value based on substats and rolls"""
+        """Calculate module value based on substats and rolls with categorized scoring"""
         if not module or not module.substats:
-            return {"total_value": 0.0, "efficiency": 0.0, "details": {}}
+            return {
+                "total_value": 0.0, 
+                "efficiency": 0.0, 
+                "details": {},
+                "defense_score": 0.0,
+                "support_score": 0.0,
+                "offense_score": 0.0
+            }
+        
+        # Define stat categories and their weights (% stats have higher weight)
+        stat_categories = {
+            # Defense stats: HP, HP%, DEF, DEF%, Effect RES
+            "defense": {
+                "HP": 1.0, "HP%": 1.5, "DEF": 1.0, "DEF%": 1.5, "Effect RES": 1.2
+            },
+            # Support stats: SPD, Effect ACC, Effect RES  
+            "support": {
+                "SPD": 1.3, "Effect ACC": 1.2, "Effect RES": 1.2
+            },
+            # Offense stats: ATK, ATK%, CRIT Rate, CRIT DMG, SPD
+            "offense": {
+                "ATK": 1.0, "ATK%": 1.5, "CRIT Rate": 1.4, "CRIT DMG": 1.4, "SPD": 1.3
+            }
+        }
         
         total_value = 0.0
         total_max_value = 0.0
         details = {}
+        
+        # Category scores
+        defense_score = 0.0
+        support_score = 0.0
+        offense_score = 0.0
         
         for substat in module.substats:
             if substat.stat_name in self.config["substats"]:
@@ -368,21 +530,40 @@ class MathicSystem:
                 max_possible = stat_config["max_value"]
                 current_efficiency = substat.get_efficiency_percentage(max_possible)
                 
-                # Value calculation: efficiency * importance weight * roll utilization
-                importance_weight = stat_config.get("importance", 1.0)  # Default importance 1.0
+                # Determine category and weight for this stat
+                category_weight = 1.0
+                category_type = "general"
+                
+                for category, stats_dict in stat_categories.items():
+                    if substat.stat_name in stats_dict:
+                        category_weight = stats_dict[substat.stat_name]
+                        category_type = category
+                        break
+                
+                # Value calculation: efficiency * category weight * roll utilization
                 roll_utilization = substat.rolls_used / substat.max_rolls if substat.max_rolls > 0 else 0
                 
-                substat_value = (current_efficiency / 100) * importance_weight * (1 + roll_utilization * 0.5)
+                substat_value = (current_efficiency / 100) * category_weight * (1 + roll_utilization * 0.5)
                 
                 total_value += substat_value
-                total_max_value += importance_weight * 1.5  # Max possible value per substat
+                total_max_value += category_weight * 1.5  # Max possible value per substat
+                
+                # Add to appropriate category score
+                category_score = (current_efficiency / 100) * category_weight
+                if category_type == "defense":
+                    defense_score += category_score
+                elif category_type == "support":
+                    support_score += category_score
+                elif category_type == "offense":
+                    offense_score += category_score
                 
                 details[substat.stat_name] = {
                     "current_value": substat.current_value,
                     "efficiency": current_efficiency,
                     "rolls_used": substat.rolls_used,
                     "substat_value": substat_value,
-                    "importance": importance_weight
+                    "category_weight": category_weight,
+                    "category_type": category_type
                 }
         
         overall_efficiency = (total_value / total_max_value * 100) if total_max_value > 0 else 0
@@ -391,7 +572,10 @@ class MathicSystem:
             "total_value": total_value,
             "efficiency": overall_efficiency,
             "roll_efficiency": module.total_enhancement_rolls / module.max_total_rolls * 100,
-            "details": details
+            "details": details,
+            "defense_score": defense_score,
+            "support_score": support_score,
+            "offense_score": offense_score
         }
     
     def create_mathic_loadout(self, loadout_name: str) -> Dict[int, Optional[str]]:
@@ -401,74 +585,119 @@ class MathicSystem:
             slot_id = slot_info["slot_id"]
             loadout[slot_id] = None
         
-        self.mathic_loadouts[loadout_name] = loadout
-        return loadout
+        # Save to database
+        if self.db.save_loadout(loadout_name, loadout):
+            # Update cache
+            self._loadouts_cache[loadout_name] = loadout
+            return loadout
+        else:
+            print(f"Failed to save loadout {loadout_name} to database")
+            return {}
     
     def assign_module_to_loadout(self, loadout_name: str, slot_id: int, module_id: str) -> bool:
         """Assign a module to a specific slot in a loadout"""
-        if loadout_name not in self.mathic_loadouts:
+        # Load loadout from database
+        loadout_data = self.db.load_loadout(loadout_name)
+        if loadout_data is None:
             print(f"Loadout '{loadout_name}' not found")
             return False
         
-        if module_id not in self.modules:
-            print(f"Module '{module_id}' not found")
+        # Validate module if provided
+        if module_id:
+            module = self.get_module_by_id(module_id)
+            if not module:
+                print(f"Module '{module_id}' not found")
+                return False
+            
+            # Check if slot is valid
+            slot_info = None
+            for slot in self.config.get("mathic_slots", []):
+                if slot["slot_id"] == slot_id:
+                    slot_info = slot
+                    break
+            
+            if not slot_info:
+                print(f"Invalid slot ID: {slot_id}")
+                return False
+            
+            # Check if module type is allowed in this slot
+            if module.module_type not in slot_info["allowed_types"]:
+                print(f"Module type '{module.module_type}' not allowed in slot {slot_id}")
+                return False
+        
+        # Update loadout data
+        loadout_data[slot_id] = module_id
+        
+        # Save to database
+        if self.db.save_loadout(loadout_name, loadout_data):
+            # Update cache
+            self._loadouts_cache[loadout_name] = loadout_data
+            return True
+        else:
+            print(f"Failed to save loadout changes to database")
             return False
-        
-        # Check if slot is valid
-        slot_info = None
-        for slot in self.config.get("mathic_slots", []):
-            if slot["slot_id"] == slot_id:
-                slot_info = slot
-                break
-        
-        if not slot_info:
-            print(f"Invalid slot ID: {slot_id}")
-            return False
-        
-        # Check if module type is allowed in this slot
-        module = self.modules[module_id]
-        if module.module_type not in slot_info["allowed_types"]:
-            print(f"Module type '{module.module_type}' not allowed in slot {slot_id}")
-            return False
-        
-        self.mathic_loadouts[loadout_name][slot_id] = module_id
-        return True
     
     def calculate_loadout_stats(self, loadout_name: str) -> Dict[str, float]:
         """Calculate total stats for a mathic loadout"""
-        if loadout_name not in self.mathic_loadouts:
+        loadout_data = self.db.load_loadout(loadout_name)
+        if not loadout_data:
             return {}
         
         total_stats = {}
-        loadout = self.mathic_loadouts[loadout_name]
         
-        for slot_id, module_id in loadout.items():
-            if module_id and module_id in self.modules:
-                module_stats = self.modules[module_id].calculate_total_stats()
-                
-                for stat_name, value in module_stats.items():
-                    if stat_name in total_stats:
-                        total_stats[stat_name] += value
+        for slot_id, module_id in loadout_data.items():
+            if module_id:
+                module = self.get_module_by_id(module_id)
+                if module:
+                    # Add main stat
+                    if module.main_stat in total_stats:
+                        total_stats[module.main_stat] += module.main_stat_value
                     else:
-                        total_stats[stat_name] = value
+                        total_stats[module.main_stat] = module.main_stat_value
+                    
+                    # Add substats
+                    for substat in module.substats:
+                        if substat.stat_name in total_stats:
+                            total_stats[substat.stat_name] += substat.current_value
+                        else:
+                            total_stats[substat.stat_name] = substat.current_value
         
         return total_stats
     
     def get_loadout_modules(self, loadout_name: str) -> Dict[int, Optional[Module]]:
         """Get all modules in a loadout"""
-        if loadout_name not in self.mathic_loadouts:
+        loadout_data = self.db.load_loadout(loadout_name)
+        if not loadout_data:
             return {}
         
         result = {}
-        loadout = self.mathic_loadouts[loadout_name]
         
-        for slot_id, module_id in loadout.items():
-            if module_id and module_id in self.modules:
-                result[slot_id] = self.modules[module_id]
+        for slot_id, module_id in loadout_data.items():
+            if module_id:
+                module = self.get_module_by_id(module_id)
+                result[slot_id] = module
             else:
                 result[slot_id] = None
         
         return result
+    
+    def delete_module(self, module_id: str) -> bool:
+        """Delete a module from the system"""
+        # Remove from cache
+        if module_id in self._modules_cache:
+            del self._modules_cache[module_id]
+        
+        # Delete from database
+        return self.db.delete_module(module_id)
+    
+    def delete_loadout(self, loadout_name: str) -> bool:
+        """Delete a loadout from the system"""
+        # Remove from cache
+        if loadout_name in self._loadouts_cache:
+            del self._loadouts_cache[loadout_name]
+        
+        # Delete from database
+        return self.db.delete_loadout(loadout_name)
     
     def remove_module_from_loadout(self, loadout_name: str, slot_id: int) -> bool:
         """Remove a module from a loadout slot"""
