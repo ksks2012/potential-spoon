@@ -346,6 +346,13 @@ class MathicSystem:
         """Get available substats that can be added to a module"""
         available_stats = list(self.config.get("substats", {}).keys())
         
+        # Remove restricted substats for this module type
+        module_type_config = self.config.get("module_types", {}).get(module.module_type, {})
+        restricted_substats = module_type_config.get("restricted_substats", [])
+        for restricted_stat in restricted_substats:
+            if restricted_stat in available_stats:
+                available_stats.remove(restricted_stat)
+        
         # Remove main stat
         if module.main_stat in available_stats:
             available_stats.remove(module.main_stat)

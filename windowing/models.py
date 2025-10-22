@@ -271,9 +271,17 @@ class MathicModel:
             return self.mathic_system.config["module_types"][module_type]["max_main_stats"][main_stat]
         return 0
     
-    def get_available_substats(self, exclude_main_stat=None):
+    def get_available_substats(self, exclude_main_stat=None, module_type=None):
         """Get available substat options"""
         available_stats = list(self.mathic_system.config.get("substats", {}).keys())
+        
+        # Remove restricted substats for this module type
+        if module_type:
+            module_type_config = self.mathic_system.config.get("module_types", {}).get(module_type, {})
+            restricted_substats = module_type_config.get("restricted_substats", [])
+            for restricted_stat in restricted_substats:
+                if restricted_stat in available_stats:
+                    available_stats.remove(restricted_stat)
         
         if exclude_main_stat and exclude_main_stat in available_stats:
             available_stats.remove(exclude_main_stat)

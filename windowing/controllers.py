@@ -395,11 +395,15 @@ class ModuleEditorController(BaseController):
         self.update_substat_options()
     
     def update_substat_options(self):
-        """Update substat combo options based on main stat"""
+        """Update substat combo options based on main stat and module type"""
         form_data = self.view.get_module_form_data()
         main_stat = form_data['main_stat']
+        module_type = form_data['module_type']
         
-        available_stats = self.model.get_available_substats(exclude_main_stat=main_stat)
+        available_stats = self.model.get_available_substats(
+            exclude_main_stat=main_stat, 
+            module_type=module_type
+        )
         self.view.update_substat_options(available_stats)
     
     def update_matrix_options(self):
