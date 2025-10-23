@@ -18,6 +18,13 @@ class Substat:
         """Check if this substat can be enhanced further"""
         return self.rolls_used < self.max_rolls
     
+    def can_enhance_individually(self, total_substats_count: int) -> bool:
+        """Check if this substat can be enhanced individually based on module rules"""
+        # Individual enhancement only allowed when module has 4 substats
+        if total_substats_count < 4:
+            return False
+        return self.can_enhance()
+    
     def enhance(self, roll_value: float) -> bool:
         """Enhance this substat with a roll value"""
         if not self.can_enhance():
@@ -47,8 +54,9 @@ class Module:
     set_tag: str = ""  # For future set effects
     matrix: str = ""  # Matrix type (e.g., "Brainfoam", "Evolguard")
     matrix_count: int = 3  # Number of matrices (1-3, default 3)
-    total_enhancement_rolls: int = 0  # Track total rolls across all substats
+    total_enhancement_rolls: int = 0  # Track total rolls across all substats (legacy)
     max_total_rolls: int = 5  # Maximum total rolls for the entire module
+    remaining_enhancements: int = 5  # Track remaining enhancement operations directly
     
     def __post_init__(self):
         if self.substats is None:
@@ -64,7 +72,11 @@ class Module:
             if substat.stat_name == stat_name:
                 return False
         
-        self.substats.append(Substat(stat_name, initial_value))
+        # Create substat with 0 initial value and 0 rolls by default
+        # User needs to add rolls to increase the value
+        new_substat = Substat(stat_name, 0.0)
+        new_substat.rolls_used = 0
+        self.substats.append(new_substat)
         return True
     
     def enhance_substat(self, stat_name: str, roll_value: float) -> bool:
@@ -83,30 +95,50 @@ class Module:
     
     def can_be_enhanced(self) -> bool:
         """Check if this module can be enhanced further (total rolls limit)"""
-        return self.total_enhancement_rolls < self.max_total_rolls
+        return self.remaining_enhancements > 0
+    
+    def can_enhance_individual_substat(self) -> bool:
+        """Check if individual substats can be enhanced (requires 4 substats)"""
+        return len(self.substats) >= 4
     
     def get_enhanceable_substats(self) -> List[Substat]:
         """Get substats that can be enhanced based on module's total roll limit"""
         if not self.can_be_enhanced():
             return []
+        
+        # Check if individual enhancement is allowed
+        if not self.can_enhance_individual_substat():
+            return []  # No individual enhancements when < 4 substats
+            
         return [s for s in self.substats if s.can_enhance()]
     
-    def enhance_substat_with_roll_tracking(self, stat_name: str, roll_value: float) -> bool:
+    def get_randomly_enhanceable_substats(self) -> List[Substat]:
+        """Get substats that can be enhanced via random enhancement (no substat count restriction)"""
+        if not self.can_be_enhanced():
+            return []
+        return [s for s in self.substats if s.can_enhance()]
+    
+    def enhance_substat_with_roll_tracking(self, stat_name: str, roll_value: float, force_random: bool = False) -> bool:
         """Enhance a specific substat with roll tracking"""
         if not self.can_be_enhanced():
+            return False
+        
+        # Check individual enhancement restrictions unless forced (for random enhancement)
+        if not force_random and not self.can_enhance_individual_substat():
             return False
             
         for substat in self.substats:
             if substat.stat_name == stat_name:
                 success = substat.enhance(roll_value)
                 if success:
-                    self.total_enhancement_rolls += 1
+                    self.total_enhancement_rolls += 1  # Keep for compatibility
+                    self.remaining_enhancements -= 1  # New logic
                     self.level += 1
                 return success
         return False
     
     def sync_enhancement_tracking(self):
-        """Synchronize total_enhancement_rolls and level based on actual substat rolls used"""
+        """Synchronize enhancement tracking based on actual substat rolls used"""
         # Calculate actual enhancement operations based on substat rolls
         # Each roll on any substat counts as one enhancement operation
         actual_enhancement_operations = sum(substat.rolls_used for substat in self.substats)
@@ -114,6 +146,9 @@ class Module:
         # Cap at max_total_rolls to maintain game balance
         self.total_enhancement_rolls = min(actual_enhancement_operations, self.max_total_rolls)
         self.level = self.total_enhancement_rolls
+        
+        # Update remaining enhancements based on actual usage
+        self.remaining_enhancements = self.max_total_rolls - self.total_enhancement_rolls
     
     def calculate_total_stats(self) -> Dict[str, float]:
         """Calculate total stats including main stat and substats"""
@@ -213,12 +248,49 @@ class MathicSystem:
             set_tag=set_tag
         )
         
+        # Generate initial substats (1~4 random count as per specification)
+        initial_substat_count = random.randint(1, 4)
+        self.generate_initial_substats(module, initial_substat_count)
+        
         # Save to database
         if self.db.save_module(module):
             return module
         else:
             print(f"Failed to save module {module_id} to database")
             return None
+    
+    def generate_initial_substats(self, module: Module, count: int) -> bool:
+        """Generate initial substats for a new module with proper roll values"""
+        if not module or count < 1 or count > 4:
+            return False
+        
+        available_stats = self.get_available_substats_for_module(module)
+        
+        if len(available_stats) < count:
+            print(f"Not enough available substats for module {module.module_id}")
+            return False
+        
+        # Randomly select substats
+        selected_stats = random.sample(available_stats, count)
+        
+        for stat_name in selected_stats:
+            stat_config = self.config["substats"][stat_name]
+            roll_range = stat_config["roll_range"]
+            initial_value = random.randint(roll_range[0], roll_range[1])
+            
+            # Create substat with initial roll value and 1 roll used
+            new_substat = Substat(stat_name, float(initial_value))
+            new_substat.rolls_used = 1  # Initial substats start with 1 roll used
+            module.substats.append(new_substat)
+        
+        # Update module's total enhancement tracking to reflect initial substats
+        module.sync_enhancement_tracking()
+        
+        # Set remaining enhancements based on initial substats count
+        # Logic: remaining = max_enhancements - initial_substats_count  
+        module.remaining_enhancements = module.max_total_rolls - count
+        
+        return True
     
     def generate_random_substats(self, module: Module, count: int = 4) -> bool:
         """Generate random substats for a module"""
@@ -280,13 +352,18 @@ class MathicSystem:
                 roll_range = stat_config["roll_range"]
                 initial_value = random.randint(roll_range[0], roll_range[1])
                 
-                module.add_substat(stat_name, float(initial_value))
-                module.total_enhancement_rolls += 1
+                # Create new substat with proper roll tracking
+                new_substat = Substat(stat_name, float(initial_value))
+                new_substat.rolls_used = 1  # New substat starts with 1 roll used
+                module.substats.append(new_substat)
+                
+                module.total_enhancement_rolls += 1  # Keep for compatibility
+                module.remaining_enhancements -= 1  # New logic
                 module.level += 1
                 result = f"New substat: {stat_name}"
         else:
-            # Get substats that can be enhanced (considering total roll limit)
-            enhanceable_substats = module.get_enhanceable_substats()
+            # Get substats that can be enhanced for random enhancement (no restriction on substat count)
+            enhanceable_substats = module.get_randomly_enhanceable_substats()
             
             if not enhanceable_substats:
                 return None
@@ -299,8 +376,8 @@ class MathicSystem:
             roll_range = stat_config["roll_range"]
             roll_value = random.randint(roll_range[0], roll_range[1])
             
-            # Enhance the substat with roll tracking
-            success = module.enhance_substat_with_roll_tracking(selected_substat.stat_name, float(roll_value))
+            # Enhance the substat with roll tracking (force random = True bypasses substat count restriction)
+            success = module.enhance_substat_with_roll_tracking(selected_substat.stat_name, float(roll_value), force_random=True)
             
             if success:
                 result = selected_substat.stat_name
@@ -317,8 +394,12 @@ class MathicSystem:
         if not module or stat_name not in [s.stat_name for s in module.substats]:
             return False
         
-        # Check if module can be enhanced enough times
-        if module.total_enhancement_rolls + roll_count > module.max_total_rolls:
+        # Check if module can be enhanced enough times using new logic
+        if module.remaining_enhancements < roll_count:
+            return False
+        
+        # Check individual enhancement restriction (must have 4 substats)
+        if not module.can_enhance_individual_substat():
             return False
         
         # Get the substat

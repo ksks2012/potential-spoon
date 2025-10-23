@@ -444,11 +444,16 @@ class ModuleEditorController(BaseController):
     
     def on_substat_type_change(self, substat_index):
         """Handle substat type change - update value options and total rolls"""
+        # Clear value when changing substat type
+        if hasattr(self.view, 'substat_controls') and 1 <= substat_index <= 4:
+            _, _, _, _, value_var, _ = self.view.substat_controls[substat_index - 1]
+            value_var.set("")
+        
         self.update_substat_value_options(substat_index)
         self.view.update_total_rolls_display()
     
     def on_substat_rolls_change(self, substat_index):
-        """Handle substat rolls change - update value options and validate total rolls"""
+        """Handle substat rolls change - update value options and validate restrictions"""
         # Prevent infinite loops during adjustment or messagebox display
         if getattr(self.view, 'adjusting_rolls', False):
             return
@@ -465,39 +470,75 @@ class ModuleEditorController(BaseController):
             form_data = self.view.get_module_form_data()
             substats_data = form_data['substats_data']
             
-            # Calculate what the new total would be
-            total_rolls = sum(data.get('rolls', 0) for data in substats_data if data.get('stat_name'))
+            # Count valid substats (non-empty stat names)
+            valid_substats_count = sum(1 for data in substats_data if data.get('stat_name') and data.get('stat_name') != "")
             
-            if total_rolls > 5:
-                # Block further processing to prevent infinite loop
-                self.view.adjusting_rolls = True
-                
-                # Calculate how much to reduce
-                excess = total_rolls - 5
+            # Check substat count restriction for roll adjustments
+            if valid_substats_count < 4:
                 changed_data = substats_data[substat_index - 1]
-                original_rolls = changed_data.get('rolls', 0)
-                adjusted_rolls = max(0, original_rolls - excess)
+                current_rolls = changed_data.get('rolls', 0)
                 
-                # Update the UI with adjusted value directly without triggering events
-                rolls_var = self.view.substat_controls[substat_index - 1][5]
+                # Block roll adjustments and reset to 1
+                if current_rolls != 1:
+                    self.view.adjusting_rolls = True
+                    
+                    # Update the UI with adjusted value directly without triggering events
+                    rolls_var = self.view.substat_controls[substat_index - 1][5]
+                    
+                    # Temporarily remove trace to prevent recursive calls
+                    trace_id = rolls_var.trace_info()
+                    for trace in trace_id:
+                        rolls_var.trace_vdelete('w', trace[1])
+                    
+                    # Set to 1 roll
+                    rolls_var.set("1")
+                    
+                    # Re-add the trace
+                    rolls_var.trace('w', 
+                                   lambda *args, idx=substat_index: self.on_substat_rolls_change(idx))
+                    
+                    # Schedule warning message for substat count restriction
+                    self.schedule_substat_count_warning()
+                    
+                    # Reset the flag
+                    self.view.adjusting_rolls = False
                 
-                # Temporarily remove trace to prevent recursive calls
-                trace_id = rolls_var.trace_info()
-                for trace in trace_id:
-                    rolls_var.trace_vdelete('w', trace[1])
+                # Skip total roll validation when < 4 substats
+                pass
+            else:
+                # Normal total roll validation when 4 substats
+                total_rolls = sum(data.get('rolls', 0) for data in substats_data if data.get('stat_name'))
                 
-                # Set the adjusted value
-                rolls_var.set(str(adjusted_rolls))
-                
-                # Re-add the trace
-                rolls_var.trace('w', 
-                               lambda *args, idx=substat_index: self.on_substat_rolls_change(idx))
-                
-                # Schedule warning message
-                self.schedule_warning_message(substat_index, adjusted_rolls)
-                
-                # Reset the flag
-                self.view.adjusting_rolls = False
+                if total_rolls > 5:
+                    # Block further processing to prevent infinite loop
+                    self.view.adjusting_rolls = True
+                    
+                    # Calculate how much to reduce
+                    excess = total_rolls - 5
+                    changed_data = substats_data[substat_index - 1]
+                    original_rolls = changed_data.get('rolls', 0)
+                    adjusted_rolls = max(1, original_rolls - excess)  # Minimum 1 roll
+                    
+                    # Update the UI with adjusted value directly without triggering events
+                    rolls_var = self.view.substat_controls[substat_index - 1][5]
+                    
+                    # Temporarily remove trace to prevent recursive calls
+                    trace_id = rolls_var.trace_info()
+                    for trace in trace_id:
+                        rolls_var.trace_vdelete('w', trace[1])
+                    
+                    # Set the adjusted value
+                    rolls_var.set(str(adjusted_rolls))
+                    
+                    # Re-add the trace
+                    rolls_var.trace('w', 
+                                   lambda *args, idx=substat_index: self.on_substat_rolls_change(idx))
+                    
+                    # Schedule warning message
+                    self.schedule_warning_message(substat_index, adjusted_rolls)
+                    
+                    # Reset the flag
+                    self.view.adjusting_rolls = False
             
         except ValueError:
             pass
@@ -527,6 +568,23 @@ class ModuleEditorController(BaseController):
         if self.view.root:
             self.view.pending_warning = self.view.root.after(100, show_warning)  # 100ms delay
     
+    def schedule_substat_count_warning(self):
+        """Schedule a warning message for substat count restriction"""
+        # Cancel any existing pending warning
+        if getattr(self.view, 'pending_count_warning', None) and self.view.root:
+            self.view.root.after_cancel(self.view.pending_count_warning)
+        
+        # Schedule new warning with a small delay to batch rapid changes
+        def show_warning():
+            messagebox.showwarning(
+                "Substat Count Restriction",
+                "You cannot adjust roll counts until there are 4 substats. Each substat may only have 1 roll."
+            )
+            self.view.pending_count_warning = None
+        
+        if self.view.root:
+            self.view.pending_count_warning = self.view.root.after(100, show_warning)  # 100ms delay
+    
     def update_substat_value_options(self, substat_index):
         """Update value options based on substat type and roll count"""
         if substat_index < 1 or substat_index > 4 or not hasattr(self.view, 'substat_controls'):
@@ -538,11 +596,16 @@ class ModuleEditorController(BaseController):
         stat_name = substat_data['stat_name']
         rolls = substat_data['rolls']
         
-        if stat_name and stat_name != "":
+        if stat_name and stat_name != "" and rolls > 0:
             value_options = self.model.get_substat_value_options(stat_name, rolls)
             self.view.update_substat_value_options(substat_index, value_options)
         else:
             self.view.update_substat_value_options(substat_index, [])
+            # Clear value if no rolls or no stat name
+            if hasattr(self.view, 'substat_controls'):
+                _, _, _, _, value_var, _ = self.view.substat_controls[substat_index - 1]
+                if rolls == 0:
+                    value_var.set("")
     
     def apply_module_changes(self):
         """Apply the changes made in the editing controls"""

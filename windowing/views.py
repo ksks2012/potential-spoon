@@ -689,7 +689,11 @@ class ModuleEditorView(BaseView):
             if i < len(module.substats):
                 substat = module.substats[i]
                 type_var.set(substat.stat_name or "")
-                value_var.set(str(int(substat.current_value)) if substat.current_value else "")
+                # Only set value if there are rolls, otherwise leave empty
+                if substat.rolls_used > 0 and substat.current_value:
+                    value_var.set(str(int(substat.current_value)))
+                else:
+                    value_var.set("")
                 rolls_var.set(str(substat.rolls_used))
             else:
                 type_var.set("")
@@ -910,7 +914,7 @@ class EnhanceSimulatorView(BaseView):
         
         info_text = f"Module: {module.module_type}\n"
         info_text += f"Main Stat: {module.main_stat} ({int(module.main_stat_value)})\n"
-        info_text += f"Level: {module.level} (Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})\n"
+        info_text += f"Level: {module.level} (Used: {module.total_enhancement_rolls} / Remaining: {module.remaining_enhancements})\n"
         info_text += f"Substats: {len(module.substats)}/4\n\n"
         
         if module.substats:

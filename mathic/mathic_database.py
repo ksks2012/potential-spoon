@@ -179,6 +179,9 @@ class MathicDatabase:
                     max_total_rolls=module_row['max_total_rolls']
                 )
                 
+                # Calculate remaining enhancements based on current state
+                module.remaining_enhancements = module.max_total_rolls - module.total_enhancement_rolls
+                
                 return module
                 
         except Exception as e:

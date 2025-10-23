@@ -297,7 +297,7 @@ class MathicModel:
     
     def get_substat_value_options(self, stat_name, rolls):
         """Get possible values for substat based on rolls"""
-        if not stat_name or stat_name == "":
+        if not stat_name or stat_name == "" or rolls <= 0:
             return []
         
         if stat_name in self.mathic_system.config["substats"]:
