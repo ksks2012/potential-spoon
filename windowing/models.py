@@ -6,6 +6,7 @@ Contains data models and business logic separated from UI
 
 import sys
 import os
+from typing import Dict, List, Optional, Tuple, Any
 
 # Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -295,26 +296,10 @@ class MathicModel:
         
         return [""] + available_stats
     
-    def get_substat_value_options(self, stat_name, rolls):
-        """Get possible values for substat based on rolls"""
-        if not stat_name or stat_name == "":
-            return []
+    # FIXME: 
+    def get_substat_value_options(self, stat_name: str, rolls: int) -> List[str]:
+       return self.mathic_system.get_substat_value_options(stat_name, rolls)
         
-        if stat_name in self.mathic_system.config["substats"]:
-            stat_config = self.mathic_system.config["substats"][stat_name]
-            roll_range = stat_config["roll_range"]
-            min_roll, max_roll = roll_range
-            
-            # Calculate possible values based on rolls
-            possible_values = []
-            for roll_value in range(min_roll, max_roll + 1):
-                total_value = roll_value * rolls
-                possible_values.append(str(total_value))
-            
-            return possible_values
-        
-        return []
-    
     def get_available_matrices_for_module(self, module_type):
         """Get available matrices for a specific module type"""
         return self.mathic_system.get_available_matrices_for_module(module_type)

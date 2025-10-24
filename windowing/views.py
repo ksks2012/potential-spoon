@@ -396,6 +396,10 @@ class ModuleEditorView(BaseView):
         self.main_stat_value_var = tk.StringVar()
         self.total_rolls_var = tk.StringVar(value="0")
         
+        # Enhancement configuration variables
+        self.max_enhancements_var = tk.StringVar(value="5")
+        self.remaining_enhancements_var = tk.StringVar(value="5")
+        
         # Matrix variables
         self.matrix_var = tk.StringVar()
         self.matrix_count_var = tk.StringVar(value="3")
@@ -418,19 +422,19 @@ class ModuleEditorView(BaseView):
         """Create substat StringVar objects"""
         self.substat1_type_var = tk.StringVar()
         self.substat1_value_var = tk.StringVar()
-        self.substat1_rolls_var = tk.StringVar(value="0")
+        self.substat1_rolls_var = tk.StringVar(value="1")
         
         self.substat2_type_var = tk.StringVar()
         self.substat2_value_var = tk.StringVar()
-        self.substat2_rolls_var = tk.StringVar(value="0")
+        self.substat2_rolls_var = tk.StringVar(value="1")
         
         self.substat3_type_var = tk.StringVar()
         self.substat3_value_var = tk.StringVar()
-        self.substat3_rolls_var = tk.StringVar(value="0")
+        self.substat3_rolls_var = tk.StringVar(value="1")
         
         self.substat4_type_var = tk.StringVar()
         self.substat4_value_var = tk.StringVar()
-        self.substat4_rolls_var = tk.StringVar(value="0")
+        self.substat4_rolls_var = tk.StringVar(value="1")
     
     def create_widgets(self):
         """Create module editor widgets"""
@@ -584,15 +588,47 @@ class ModuleEditorView(BaseView):
         self.total_rolls_label.grid(row=0, column=1, padx=(0, 10))
         ttk.Label(edit_frame, text="(auto-calculated)", font=('Arial', 8), foreground="gray").grid(row=0, column=2, padx=(0, 10))
         
+        # Enhancement configuration
+        enhancement_frame = ttk.LabelFrame(edit_frame, text="Enhancement Configuration", padding="5")
+        enhancement_frame.grid(row=0, column=3, columnspan=3, sticky=(tk.W, tk.E), padx=(20, 0))
+        
+        # Max enhancements setting with slider
+        ttk.Label(enhancement_frame, text="Max Enhancements:").grid(row=0, column=0, padx=(0, 5))
+        max_enh_scale = tk.Scale(enhancement_frame, from_=0, to=5, orient=tk.HORIZONTAL,
+                               variable=self.max_enhancements_var, 
+                               command=lambda v: self._on_max_enhancements_change())
+        max_enh_scale.grid(row=0, column=1, padx=(0, 10))
+        max_enh_scale.configure(length=100, width=15)
+        
+        # Remaining enhancements display
+        ttk.Label(enhancement_frame, text="Remaining:").grid(row=0, column=2, padx=(10, 5))
+        remaining_label = ttk.Label(enhancement_frame, textvariable=self.remaining_enhancements_var,
+                                  font=('Arial', 10, 'bold'), foreground="darkgreen")
+        remaining_label.grid(row=0, column=3)
+        
         # Substat editing controls
         ttk.Label(edit_frame, text="Edit Substat:").grid(row=1, column=0, padx=(0, 5), pady=(10, 0))
+        
+        # Create substat header labels
+        self._create_substat_headers(edit_frame)
         
         # Create substat control frames
         self._create_substat_controls(edit_frame)
         
         # Apply changes button
         ttk.Button(edit_frame, text="Apply Changes", 
-                  command=lambda: self.controller.apply_module_changes() if self.controller else None).grid(row=6, column=0, pady=(10, 0))
+                  command=lambda: self.controller.apply_module_changes() if self.controller else None).grid(row=7, column=0, pady=(10, 0))
+    
+    def _create_substat_headers(self, parent):
+        """Create header labels for substat controls"""
+        header_frame = ttk.Frame(parent)
+        header_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 5))
+        
+        # Headers aligned with substat controls
+        ttk.Label(header_frame, text="", width=3).grid(row=0, column=0, padx=(0, 5))  # Number column
+        ttk.Label(header_frame, text="Type", font=('Arial', 9, 'bold')).grid(row=0, column=1, padx=(0, 5))
+        ttk.Label(header_frame, text="Value", font=('Arial', 9, 'bold')).grid(row=0, column=2, padx=(0, 5))
+        ttk.Label(header_frame, text="Rolls", font=('Arial', 9, 'bold')).grid(row=0, column=3)
     
     def _create_substat_controls(self, parent):
         """Create individual substat controls"""
@@ -606,7 +642,7 @@ class ModuleEditorView(BaseView):
         self.substat_controls = []
         
         for i, (type_var, value_var, rolls_var) in enumerate(substat_vars):
-            row = 2 + i
+            row = 3 + i  # Start from row 3 because header is at row 2
             
             # Create frame for this substat
             substat_frame = ttk.Frame(parent)
@@ -624,7 +660,7 @@ class ModuleEditorView(BaseView):
             value_combo.grid(row=0, column=2, padx=(0, 5))
             
             # Rolls spinbox
-            rolls_spinbox = ttk.Spinbox(substat_frame, textvariable=rolls_var, from_=0, to=5, width=5)
+            rolls_spinbox = ttk.Spinbox(substat_frame, textvariable=rolls_var, from_=1, to=6, width=5)
             rolls_spinbox.grid(row=0, column=3)
             
             # Store controls for easy access
@@ -689,7 +725,11 @@ class ModuleEditorView(BaseView):
             if i < len(module.substats):
                 substat = module.substats[i]
                 type_var.set(substat.stat_name or "")
-                value_var.set(str(int(substat.current_value)) if substat.current_value else "")
+                # Only set value if there are rolls, otherwise leave empty
+                if substat.rolls_used > 0 and substat.current_value:
+                    value_var.set(str(int(substat.current_value)))
+                else:
+                    value_var.set("")
                 rolls_var.set(str(substat.rolls_used))
             else:
                 type_var.set("")
@@ -706,15 +746,44 @@ class ModuleEditorView(BaseView):
             self.main_stat_var.set(options[0])
     
     def update_substat_options(self, options):
-        """Update substat combo options"""
+        """Update substat combo options (legacy method for compatibility)"""
         for combo, _, _, _, _, _ in self.substat_controls:
             combo.configure(values=options)
+    
+    def update_substat_options_individually(self, base_options, existing_substats):
+        """Update each substat combo with individually filtered options"""
+        for i, (combo, _, _, type_var, _, _) in enumerate(self.substat_controls):
+            # Get current selection for this substat
+            current_selection = type_var.get()
+            
+            # Create filtered options: exclude other substats but keep current selection
+            filtered_options = [""]  # Always include empty option
+            for option in base_options:
+                if option not in existing_substats or option == current_selection:
+                    filtered_options.append(option)
+            
+            # Update combo values
+            combo.configure(values=filtered_options)
+            
+            # Preserve current selection if it's still valid
+            if current_selection and current_selection not in filtered_options:
+                type_var.set("")  # Clear invalid selection
     
     def update_substat_value_options(self, substat_index, options):
         """Update value options for specific substat"""
         if 0 <= substat_index - 1 < len(self.substat_controls):
-            _, value_combo, _, _, _, _ = self.substat_controls[substat_index - 1]
+            _, value_combo, _, _, value_var, _ = self.substat_controls[substat_index - 1]
             value_combo.configure(values=options)
+            
+            # Set default value if options available and current value not in options
+            if options:
+                current_value = value_var.get()
+                if not current_value or current_value not in options:
+                    # Set to the first (minimum) available value
+                    value_var.set(options[0])
+            else:
+                # Clear value if no options
+                value_var.set("")
     
     def update_matrix_options(self, options):
         """Update matrix combo options"""
@@ -737,6 +806,15 @@ class ModuleEditorView(BaseView):
             self.total_rolls_var.set(str(total))
         except ValueError:
             self.total_rolls_var.set("0")
+    
+    def _on_max_enhancements_change(self):
+        """Handle max enhancements change"""
+        if self.controller:
+            self.controller.on_max_enhancements_change()
+    
+    def update_remaining_enhancements_display(self, remaining):
+        """Update remaining enhancements display"""
+        self.remaining_enhancements_var.set(str(remaining))
     
     def get_selected_module_index(self):
         """Get selected module index"""
@@ -761,7 +839,8 @@ class ModuleEditorView(BaseView):
             'module_type': self.module_type_var.get(),
             'main_stat': self.main_stat_var.get(),
             'main_stat_value': self.main_stat_value_var.get(),
-            'substats_data': substats_data
+            'substats_data': substats_data,
+            'max_enhancements': int(self.max_enhancements_var.get()) if self.max_enhancements_var.get().isdigit() else 5
         }
 
 
@@ -910,7 +989,7 @@ class EnhanceSimulatorView(BaseView):
         
         info_text = f"Module: {module.module_type}\n"
         info_text += f"Main Stat: {module.main_stat} ({int(module.main_stat_value)})\n"
-        info_text += f"Level: {module.level} (Rolls: {module.total_enhancement_rolls}/{module.max_total_rolls})\n"
+        info_text += f"Level: {module.level} (Used: {module.total_enhancement_rolls} / Remaining: {module.remaining_enhancements})\n"
         info_text += f"Substats: {len(module.substats)}/4\n\n"
         
         if module.substats:
