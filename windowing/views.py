@@ -609,12 +609,26 @@ class ModuleEditorView(BaseView):
         # Substat editing controls
         ttk.Label(edit_frame, text="Edit Substat:").grid(row=1, column=0, padx=(0, 5), pady=(10, 0))
         
+        # Create substat header labels
+        self._create_substat_headers(edit_frame)
+        
         # Create substat control frames
         self._create_substat_controls(edit_frame)
         
         # Apply changes button
         ttk.Button(edit_frame, text="Apply Changes", 
-                  command=lambda: self.controller.apply_module_changes() if self.controller else None).grid(row=6, column=0, pady=(10, 0))
+                  command=lambda: self.controller.apply_module_changes() if self.controller else None).grid(row=7, column=0, pady=(10, 0))
+    
+    def _create_substat_headers(self, parent):
+        """Create header labels for substat controls"""
+        header_frame = ttk.Frame(parent)
+        header_frame.grid(row=2, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10, 5))
+        
+        # Headers aligned with substat controls
+        ttk.Label(header_frame, text="", width=3).grid(row=0, column=0, padx=(0, 5))  # Number column
+        ttk.Label(header_frame, text="Type", font=('Arial', 9, 'bold')).grid(row=0, column=1, padx=(0, 5))
+        ttk.Label(header_frame, text="Value", font=('Arial', 9, 'bold')).grid(row=0, column=2, padx=(0, 5))
+        ttk.Label(header_frame, text="Rolls", font=('Arial', 9, 'bold')).grid(row=0, column=3)
     
     def _create_substat_controls(self, parent):
         """Create individual substat controls"""
@@ -628,7 +642,7 @@ class ModuleEditorView(BaseView):
         self.substat_controls = []
         
         for i, (type_var, value_var, rolls_var) in enumerate(substat_vars):
-            row = 2 + i
+            row = 3 + i  # Start from row 3 because header is at row 2
             
             # Create frame for this substat
             substat_frame = ttk.Frame(parent)
@@ -732,15 +746,44 @@ class ModuleEditorView(BaseView):
             self.main_stat_var.set(options[0])
     
     def update_substat_options(self, options):
-        """Update substat combo options"""
+        """Update substat combo options (legacy method for compatibility)"""
         for combo, _, _, _, _, _ in self.substat_controls:
             combo.configure(values=options)
+    
+    def update_substat_options_individually(self, base_options, existing_substats):
+        """Update each substat combo with individually filtered options"""
+        for i, (combo, _, _, type_var, _, _) in enumerate(self.substat_controls):
+            # Get current selection for this substat
+            current_selection = type_var.get()
+            
+            # Create filtered options: exclude other substats but keep current selection
+            filtered_options = [""]  # Always include empty option
+            for option in base_options:
+                if option not in existing_substats or option == current_selection:
+                    filtered_options.append(option)
+            
+            # Update combo values
+            combo.configure(values=filtered_options)
+            
+            # Preserve current selection if it's still valid
+            if current_selection and current_selection not in filtered_options:
+                type_var.set("")  # Clear invalid selection
     
     def update_substat_value_options(self, substat_index, options):
         """Update value options for specific substat"""
         if 0 <= substat_index - 1 < len(self.substat_controls):
-            _, value_combo, _, _, _, _ = self.substat_controls[substat_index - 1]
+            _, value_combo, _, _, value_var, _ = self.substat_controls[substat_index - 1]
             value_combo.configure(values=options)
+            
+            # Set default value if options available and current value not in options
+            if options:
+                current_value = value_var.get()
+                if not current_value or current_value not in options:
+                    # Set to the first (minimum) available value
+                    value_var.set(options[0])
+            else:
+                # Clear value if no options
+                value_var.set("")
     
     def update_matrix_options(self, options):
         """Update matrix combo options"""

@@ -353,18 +353,26 @@ class ModuleEditorController(BaseController):
                 module_id = module_ids[selected_index]
                 module = self.model.get_module_by_id(module_id)
                 self.view.current_selected_module_id = module_id
-                self.view.update_module_details(module)
                 
-                # Update enhancement configuration display
-                if hasattr(module, 'max_enhancements'):
-                    self.view.max_enhancements_var.set(str(module.max_enhancements))
-                else:
-                    module.max_enhancements = 5  # Set default if not present
-                    self.view.max_enhancements_var.set("5")
+                # Set initialization flag to prevent roll change validation during module loading
+                self.view.initializing_module = True
                 
-                self.view.update_remaining_enhancements_display(module.remaining_enhancements)
-                
-                self.app_state.set_current_module(module_id)
+                try:
+                    self.view.update_module_details(module)
+                    
+                    # Update enhancement configuration display
+                    if hasattr(module, 'max_enhancements'):
+                        self.view.max_enhancements_var.set(str(module.max_enhancements))
+                    else:
+                        module.max_enhancements = 5  # Set default if not present
+                        self.view.max_enhancements_var.set("5")
+                    
+                    self.view.update_remaining_enhancements_display(module.remaining_enhancements)
+                    
+                    self.app_state.set_current_module(module_id)
+                finally:
+                    # Always clear the initialization flag
+                    self.view.initializing_module = False
     
     def on_module_type_change(self, preserve_current_values=False):
         """Handle module type change"""
@@ -405,16 +413,27 @@ class ModuleEditorController(BaseController):
         self.update_substat_options()
     
     def update_substat_options(self):
-        """Update substat combo options based on main stat and module type"""
+        """Update substat combo options based on main stat, module type, and existing selections"""
         form_data = self.view.get_module_form_data()
         main_stat = form_data['main_stat']
         module_type = form_data['module_type']
+        substats_data = form_data.get('substats_data', [])
         
+        # Get currently selected substats (excluding empty ones)
+        existing_substats = []
+        for data in substats_data:
+            stat_name = data.get('stat_name')
+            if stat_name and stat_name != "":
+                existing_substats.append(stat_name)
+        
+        # Get base available stats excluding main stat
         available_stats = self.model.get_available_substats(
             exclude_main_stat=main_stat, 
             module_type=module_type
         )
-        self.view.update_substat_options(available_stats)
+        
+        # Update each substat combo with filtered options
+        self.view.update_substat_options_individually(available_stats, existing_substats)
     
     def update_matrix_options(self):
         """Update matrix options based on module type"""
@@ -459,6 +478,9 @@ class ModuleEditorController(BaseController):
             _, _, _, _, value_var, _ = self.view.substat_controls[substat_index - 1]
             value_var.set("")
         
+        # Update substat options for all combos to reflect new selections
+        self.update_substat_options()
+        
         self.update_substat_value_options(substat_index)
         self.view.update_total_rolls_display()
     
@@ -466,6 +488,12 @@ class ModuleEditorController(BaseController):
         """Handle substat rolls change - update value options and validate restrictions"""
         # Prevent infinite loops during adjustment or messagebox display
         if getattr(self.view, 'adjusting_rolls', False):
+            return
+        
+        # Skip validation during module selection/initialization
+        if getattr(self.view, 'initializing_module', False):
+            self.update_substat_value_options(substat_index)
+            self.view.update_total_rolls_display()
             return
         
         # Final protection: prevent excessive reentrancy depth
@@ -482,14 +510,14 @@ class ModuleEditorController(BaseController):
             
             # Count valid substats (non-empty stat names)
             valid_substats_count = sum(1 for data in substats_data if data.get('stat_name') and data.get('stat_name') != "")
-            
             # Check substat count restriction for roll adjustments
             if valid_substats_count < 4:
                 changed_data = substats_data[substat_index - 1]
                 current_rolls = changed_data.get('rolls', 0)
+                stat_name = changed_data.get('stat_name', "")
                 
-                # Block roll adjustments and reset to 1
-                if current_rolls != 1:
+                # Only block roll adjustments if the substat is not empty and user tries to set > 1 roll
+                if stat_name and stat_name != "" and current_rolls != 1:
                     self.view.adjusting_rolls = True
                     
                     # Update the UI with adjusted value directly without triggering events
