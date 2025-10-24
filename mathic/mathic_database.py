@@ -43,10 +43,19 @@ class MathicDatabase:
                     matrix_count INTEGER DEFAULT 3,
                     total_enhancement_rolls INTEGER DEFAULT 0,
                     max_total_rolls INTEGER DEFAULT 5,
+                    max_enhancements INTEGER DEFAULT 5,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            # Add max_enhancements column if it doesn't exist (migration)
+            try:
+                conn.execute('ALTER TABLE modules ADD COLUMN max_enhancements INTEGER DEFAULT 5')
+                print("Added max_enhancements column to database")
+            except sqlite3.OperationalError:
+                # Column already exists
+                pass
             
             # Create substats table
             conn.execute('''
@@ -100,12 +109,13 @@ class MathicDatabase:
                     INSERT OR REPLACE INTO modules (
                         module_id, module_type, slot_position, level, main_stat, main_stat_value,
                         set_tag, matrix, matrix_count, total_enhancement_rolls, max_total_rolls,
-                        updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        max_enhancements, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ''', (
                     module.module_id, module.module_type, module.slot_position, module.level,
                     module.main_stat, module.main_stat_value, module.set_tag, module.matrix,
-                    module.matrix_count, module.total_enhancement_rolls, module.max_total_rolls
+                    module.matrix_count, module.total_enhancement_rolls, module.max_total_rolls,
+                    getattr(module, 'max_enhancements', 5)
                 ))
                 
                 # Delete existing substats
@@ -163,6 +173,12 @@ class MathicDatabase:
                     )
                     substats.append(substat)
                 
+                # Handle max_enhancements field safely
+                try:
+                    max_enhancements = module_row['max_enhancements']
+                except (KeyError, IndexError):
+                    max_enhancements = 5
+                
                 # Create module
                 module = Module(
                     module_id=module_row['module_id'],
@@ -176,11 +192,13 @@ class MathicDatabase:
                     matrix=module_row['matrix'],
                     matrix_count=module_row['matrix_count'],
                     total_enhancement_rolls=module_row['total_enhancement_rolls'],
-                    max_total_rolls=module_row['max_total_rolls']
+                    max_total_rolls=module_row['max_total_rolls'],
+                    max_enhancements=max_enhancements
                 )
                 
                 # Calculate remaining enhancements based on current state
-                module.remaining_enhancements = module.max_total_rolls - module.total_enhancement_rolls
+                # Sync first to get accurate tracking
+                module.sync_enhancement_tracking()
                 
                 return module
                 

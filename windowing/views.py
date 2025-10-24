@@ -396,6 +396,10 @@ class ModuleEditorView(BaseView):
         self.main_stat_value_var = tk.StringVar()
         self.total_rolls_var = tk.StringVar(value="0")
         
+        # Enhancement configuration variables
+        self.max_enhancements_var = tk.StringVar(value="5")
+        self.remaining_enhancements_var = tk.StringVar(value="5")
+        
         # Matrix variables
         self.matrix_var = tk.StringVar()
         self.matrix_count_var = tk.StringVar(value="3")
@@ -418,19 +422,19 @@ class ModuleEditorView(BaseView):
         """Create substat StringVar objects"""
         self.substat1_type_var = tk.StringVar()
         self.substat1_value_var = tk.StringVar()
-        self.substat1_rolls_var = tk.StringVar(value="0")
+        self.substat1_rolls_var = tk.StringVar(value="1")
         
         self.substat2_type_var = tk.StringVar()
         self.substat2_value_var = tk.StringVar()
-        self.substat2_rolls_var = tk.StringVar(value="0")
+        self.substat2_rolls_var = tk.StringVar(value="1")
         
         self.substat3_type_var = tk.StringVar()
         self.substat3_value_var = tk.StringVar()
-        self.substat3_rolls_var = tk.StringVar(value="0")
+        self.substat3_rolls_var = tk.StringVar(value="1")
         
         self.substat4_type_var = tk.StringVar()
         self.substat4_value_var = tk.StringVar()
-        self.substat4_rolls_var = tk.StringVar(value="0")
+        self.substat4_rolls_var = tk.StringVar(value="1")
     
     def create_widgets(self):
         """Create module editor widgets"""
@@ -584,6 +588,24 @@ class ModuleEditorView(BaseView):
         self.total_rolls_label.grid(row=0, column=1, padx=(0, 10))
         ttk.Label(edit_frame, text="(auto-calculated)", font=('Arial', 8), foreground="gray").grid(row=0, column=2, padx=(0, 10))
         
+        # Enhancement configuration
+        enhancement_frame = ttk.LabelFrame(edit_frame, text="Enhancement Configuration", padding="5")
+        enhancement_frame.grid(row=0, column=3, columnspan=3, sticky=(tk.W, tk.E), padx=(20, 0))
+        
+        # Max enhancements setting with slider
+        ttk.Label(enhancement_frame, text="Max Enhancements:").grid(row=0, column=0, padx=(0, 5))
+        max_enh_scale = tk.Scale(enhancement_frame, from_=0, to=5, orient=tk.HORIZONTAL,
+                               variable=self.max_enhancements_var, 
+                               command=lambda v: self._on_max_enhancements_change())
+        max_enh_scale.grid(row=0, column=1, padx=(0, 10))
+        max_enh_scale.configure(length=100, width=15)
+        
+        # Remaining enhancements display
+        ttk.Label(enhancement_frame, text="Remaining:").grid(row=0, column=2, padx=(10, 5))
+        remaining_label = ttk.Label(enhancement_frame, textvariable=self.remaining_enhancements_var,
+                                  font=('Arial', 10, 'bold'), foreground="darkgreen")
+        remaining_label.grid(row=0, column=3)
+        
         # Substat editing controls
         ttk.Label(edit_frame, text="Edit Substat:").grid(row=1, column=0, padx=(0, 5), pady=(10, 0))
         
@@ -624,7 +646,7 @@ class ModuleEditorView(BaseView):
             value_combo.grid(row=0, column=2, padx=(0, 5))
             
             # Rolls spinbox
-            rolls_spinbox = ttk.Spinbox(substat_frame, textvariable=rolls_var, from_=0, to=5, width=5)
+            rolls_spinbox = ttk.Spinbox(substat_frame, textvariable=rolls_var, from_=1, to=6, width=5)
             rolls_spinbox.grid(row=0, column=3)
             
             # Store controls for easy access
@@ -742,6 +764,15 @@ class ModuleEditorView(BaseView):
         except ValueError:
             self.total_rolls_var.set("0")
     
+    def _on_max_enhancements_change(self):
+        """Handle max enhancements change"""
+        if self.controller:
+            self.controller.on_max_enhancements_change()
+    
+    def update_remaining_enhancements_display(self, remaining):
+        """Update remaining enhancements display"""
+        self.remaining_enhancements_var.set(str(remaining))
+    
     def get_selected_module_index(self):
         """Get selected module index"""
         selection = self.module_listbox.curselection()
@@ -765,7 +796,8 @@ class ModuleEditorView(BaseView):
             'module_type': self.module_type_var.get(),
             'main_stat': self.main_stat_var.get(),
             'main_stat_value': self.main_stat_value_var.get(),
-            'substats_data': substats_data
+            'substats_data': substats_data,
+            'max_enhancements': int(self.max_enhancements_var.get()) if self.max_enhancements_var.get().isdigit() else 5
         }
 
 

@@ -12,7 +12,7 @@ class Substat:
     stat_name: str
     current_value: float
     rolls_used: int = 0
-    max_rolls: int = 5
+    max_rolls: int = 6
     
     def can_enhance(self) -> bool:
         """Check if this substat can be enhanced further"""
@@ -55,8 +55,9 @@ class Module:
     matrix: str = ""  # Matrix type (e.g., "Brainfoam", "Evolguard")
     matrix_count: int = 3  # Number of matrices (1-3, default 3)
     total_enhancement_rolls: int = 0  # Track total rolls across all substats (legacy)
-    max_total_rolls: int = 5  # Maximum total rolls for the entire module
+    max_total_rolls: int = 5  # Maximum total rolls for the entire module (legacy)
     remaining_enhancements: int = 5  # Track remaining enhancement operations directly
+    max_enhancements: int = 5  # Maximum possible enhancements (configurable 0-5)
     
     def __post_init__(self):
         if self.substats is None:
@@ -72,10 +73,9 @@ class Module:
             if substat.stat_name == stat_name:
                 return False
         
-        # Create substat with 0 initial value and 0 rolls by default
-        # User needs to add rolls to increase the value
-        new_substat = Substat(stat_name, 0.0)
-        new_substat.rolls_used = 0
+        # Create substat with initial value and 1 roll used (initial roll)
+        new_substat = Substat(stat_name, initial_value)
+        new_substat.rolls_used = 1
         self.substats.append(new_substat)
         return True
     
@@ -96,6 +96,13 @@ class Module:
     def can_be_enhanced(self) -> bool:
         """Check if this module can be enhanced further (total rolls limit)"""
         return self.remaining_enhancements > 0
+    
+    def get_max_possible_total_rolls(self) -> int:
+        """Calculate maximum possible total rolls based on substats"""
+        # Each substat starts with 1 roll, can be enhanced up to max_rolls (5)
+        # So with 4 substats: initial 4 + max enhancements (configurable)
+        initial_rolls = len(self.substats)
+        return initial_rolls + self.max_enhancements
     
     def can_enhance_individual_substat(self) -> bool:
         """Check if individual substats can be enhanced (requires 4 substats)"""
@@ -143,12 +150,18 @@ class Module:
         # Each roll on any substat counts as one enhancement operation
         actual_enhancement_operations = sum(substat.rolls_used for substat in self.substats)
         
-        # Cap at max_total_rolls to maintain game balance
-        self.total_enhancement_rolls = min(actual_enhancement_operations, self.max_total_rolls)
-        self.level = self.total_enhancement_rolls
+        # Calculate initial rolls (each substat starts with 1 roll)
+        initial_rolls = len(self.substats)
         
-        # Update remaining enhancements based on actual usage
-        self.remaining_enhancements = self.max_total_rolls - self.total_enhancement_rolls
+        # Enhancement operations = total rolls - initial rolls
+        enhancement_operations = max(0, actual_enhancement_operations - initial_rolls)
+        
+        # Update tracking
+        self.total_enhancement_rolls = enhancement_operations
+        self.level = actual_enhancement_operations  # Level equals total rolls including initial
+        
+        # Update remaining enhancements based on configuration
+        self.remaining_enhancements = self.max_enhancements - enhancement_operations
     
     def calculate_total_stats(self) -> Dict[str, float]:
         """Calculate total stats including main stat and substats"""
@@ -286,9 +299,8 @@ class MathicSystem:
         # Update module's total enhancement tracking to reflect initial substats
         module.sync_enhancement_tracking()
         
-        # Set remaining enhancements based on initial substats count
-        # Logic: remaining = max_enhancements - initial_substats_count  
-        module.remaining_enhancements = module.max_total_rolls - count
+        # Set remaining enhancements to max (no enhancements used yet, only initial substats)
+        module.remaining_enhancements = module.max_enhancements
         
         return True
     
@@ -452,6 +464,26 @@ class MathicSystem:
                 available_stats.remove(stat)
         
         return available_stats
+    
+    def get_substat_value_options(self, stat_name: str, rolls: int) -> List[str]:
+        """Get possible values for substat based on rolls"""
+        if not stat_name or stat_name == "" or rolls <= 0:
+            return []
+        
+        if stat_name in self.config["substats"]:
+            stat_config = self.config["substats"][stat_name]
+            roll_range = stat_config["roll_range"]
+            min_roll, max_roll = roll_range
+            
+            # Calculate possible values based on rolls
+            # contiguous sums: all integers from min_roll*rolls to max_roll*rolls
+            start = min_roll * rolls
+            end = max_roll * rolls
+            possible_values = list(map(str, range(start, end + 1)))
+            
+            return possible_values
+        
+        return []
     
     def get_module_by_id(self, module_id: str) -> Optional[Module]:
         """Get module by its ID"""

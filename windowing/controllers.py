@@ -354,6 +354,16 @@ class ModuleEditorController(BaseController):
                 module = self.model.get_module_by_id(module_id)
                 self.view.current_selected_module_id = module_id
                 self.view.update_module_details(module)
+                
+                # Update enhancement configuration display
+                if hasattr(module, 'max_enhancements'):
+                    self.view.max_enhancements_var.set(str(module.max_enhancements))
+                else:
+                    module.max_enhancements = 5  # Set default if not present
+                    self.view.max_enhancements_var.set("5")
+                
+                self.view.update_remaining_enhancements_display(module.remaining_enhancements)
+                
                 self.app_state.set_current_module(module_id)
     
     def on_module_type_change(self, preserve_current_values=False):
@@ -509,12 +519,23 @@ class ModuleEditorController(BaseController):
                 # Normal total roll validation when 4 substats
                 total_rolls = sum(data.get('rolls', 0) for data in substats_data if data.get('stat_name'))
                 
-                if total_rolls > 5:
+                # Get current module to check dynamic max total rolls
+                module = None
+                if hasattr(self.view, 'current_selected_module_id') and self.view.current_selected_module_id:
+                    module = self.model.get_module_by_id(self.view.current_selected_module_id)
+                
+                # Calculate max allowed total rolls
+                if module:
+                    max_total_rolls = module.get_max_possible_total_rolls()
+                else:
+                    max_total_rolls = 9  # Default: 4 initial + 5 max enhancements
+                
+                if total_rolls > max_total_rolls:
                     # Block further processing to prevent infinite loop
                     self.view.adjusting_rolls = True
                     
                     # Calculate how much to reduce
-                    excess = total_rolls - 5
+                    excess = total_rolls - max_total_rolls
                     changed_data = substats_data[substat_index - 1]
                     original_rolls = changed_data.get('rolls', 0)
                     adjusted_rolls = max(1, original_rolls - excess)  # Minimum 1 roll
@@ -559,10 +580,23 @@ class ModuleEditorController(BaseController):
         
         # Schedule new warning with a small delay to batch rapid changes
         def show_warning():
-            messagebox.showwarning(
-                "Rolls Limit",
-                f"Total rolls cannot exceed 5. Substat {substat_index} rolls adjusted to {adjusted_value}."
-            )
+            # Get current module to show accurate limit
+            module = None
+            if hasattr(self.view, 'current_selected_module_id') and self.view.current_selected_module_id:
+                module = self.model.get_module_by_id(self.view.current_selected_module_id)
+            
+            if module:
+                max_total = module.get_max_possible_total_rolls()
+                messagebox.showwarning(
+                    "Rolls Limit",
+                    f"Total rolls cannot exceed {max_total} (4 initial + {module.max_enhancements} enhancements). "
+                    f"Substat {substat_index} rolls adjusted to {adjusted_value}."
+                )
+            else:
+                messagebox.showwarning(
+                    "Rolls Limit",
+                    f"Total rolls limit exceeded. Substat {substat_index} rolls adjusted to {adjusted_value}."
+                )
             self.view.pending_warning = None
         
         if self.view.root:
@@ -584,6 +618,56 @@ class ModuleEditorController(BaseController):
         
         if self.view.root:
             self.view.pending_count_warning = self.view.root.after(100, show_warning)  # 100ms delay
+    
+    def on_max_enhancements_change(self):
+        """Handle max enhancements configuration change"""
+        if not hasattr(self.view, 'current_selected_module_id') or self.view.current_selected_module_id is None:
+            return
+        
+        module_id = self.view.current_selected_module_id
+        module = self.model.get_module_by_id(module_id)
+        if not module:
+            return
+        
+        try:
+            form_data = self.view.get_module_form_data()
+            new_max_enhancements = form_data['max_enhancements']
+            
+            # Validate range
+            if new_max_enhancements < 0 or new_max_enhancements > 5:
+                self.view.max_enhancements_var.set("5")
+                return
+            
+            # Update module configuration
+            module.max_enhancements = new_max_enhancements
+            
+            # Recalculate remaining enhancements
+            module.sync_enhancement_tracking()
+            
+            # Update display
+            self.view.update_remaining_enhancements_display(module.remaining_enhancements)
+            
+            # Validate current roll configuration
+            self._validate_total_roll_limits(module)
+            
+            # Save changes
+            self.model.mathic_system.db.save_module(module)
+            
+        except (ValueError, AttributeError) as e:
+            print(f"Error updating max enhancements: {e}")
+    
+    def _validate_total_roll_limits(self, module):
+        """Validate and adjust rolls if they exceed new limits"""
+        max_possible_total = module.get_max_possible_total_rolls()
+        current_total = sum(substat.rolls_used for substat in module.substats)
+        
+        if current_total > max_possible_total:
+            # Need to reduce rolls - show warning and suggest action
+            messagebox.showwarning(
+                "Roll Limit Exceeded",
+                f"Current total rolls ({current_total}) exceed new maximum ({max_possible_total}). "
+                f"Please manually adjust substat rolls or increase max enhancements."
+            )
     
     def update_substat_value_options(self, substat_index):
         """Update value options based on substat type and roll count"""
