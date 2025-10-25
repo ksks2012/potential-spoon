@@ -117,10 +117,30 @@ class MathicModel(BaseModel):
     def calculate_module_value(self, module_id):
         """Calculate module value analysis"""
         if module_id not in self.mathic_system.modules:
-            return {}
+            return {
+                "total_value": 0.0, 
+                "efficiency": 0.0, 
+                "roll_efficiency": 0.0,
+                "details": {},
+                "defense_score": 0.0,
+                "support_score": 0.0,
+                "offense_score": 0.0
+            }
         
-        module = self.mathic_system.modules[module_id]
-        return self.mathic_system.calculate_module_value(module)
+        try:
+            module = self.mathic_system.modules[module_id]
+            return self.mathic_system.calculate_module_value(module)
+        except Exception as e:
+            print(f"Error calculating module value for {module_id}: {e}")
+            return {
+                "total_value": 0.0, 
+                "efficiency": 0.0, 
+                "roll_efficiency": 0.0,
+                "details": {},
+                "defense_score": 0.0,
+                "support_score": 0.0,
+                "offense_score": 0.0
+            }
     
     def get_all_loadouts(self):
         """Get all loadouts"""
