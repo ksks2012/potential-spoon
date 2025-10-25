@@ -65,8 +65,6 @@ class ShellListView(BaseView):
         self._create_filter_section(left_frame)
         self._create_shell_list(left_frame)
         self._create_shell_details(right_frame)
-        
-        return self.parent
     
     def _create_filter_section(self, parent):
         """Create filter controls section"""
@@ -494,3 +492,5 @@ class ShellListView(BaseView):
     def get_filter_mode(self):
         """Get matrix filter mode (all/any)"""
         return self.filter_mode_var.get()
+
+
