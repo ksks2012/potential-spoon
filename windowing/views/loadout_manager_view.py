@@ -20,6 +20,7 @@ class LoadoutManagerView(BaseView):
         self.slot_frames = {}
         self.slot_combos = {}
         self.slot_vars = {}
+        self.slot_main_stat_labels = {}
         self.slot_substats_labels = {}
         self.stats_summary_text = None
         
@@ -88,15 +89,27 @@ class LoadoutManagerView(BaseView):
             self.slot_combos[slot_id].bind('<<ComboboxSelected>>', 
                                          lambda e, s=slot_id: self.controller.on_slot_module_change(s) if self.controller else None)
             
+            # Main stat display
+            main_stat_frame = ttk.Frame(slot_frame)
+            main_stat_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+            
+            ttk.Label(main_stat_frame, text="Main Stat:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky=tk.W)
+            self.slot_main_stat_labels[slot_id] = ttk.Label(main_stat_frame, text="", 
+                                                           font=("Arial", 10, "bold"), foreground="darkred")
+            self.slot_main_stat_labels[slot_id].grid(row=0, column=1, sticky=tk.W, padx=(5, 0))
+            
             # Substats display area
             substats_frame = ttk.Frame(slot_frame)
-            substats_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+            substats_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+            
+            # Substats header
+            ttk.Label(substats_frame, text="Substats:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky=tk.W, pady=(0, 3))
             
             # Create 4 labels for substats in vertical layout
             self.slot_substats_labels[slot_id] = []
             for j in range(4):
-                substat_label = ttk.Label(substats_frame, text="", font=("Arial", 10), foreground="darkblue")
-                substat_label.grid(row=j, column=0, sticky=tk.W, pady=1)
+                substat_label = ttk.Label(substats_frame, text="", font=("Arial", 9), foreground="darkblue")
+                substat_label.grid(row=j+1, column=0, sticky=tk.W, pady=1)
                 self.slot_substats_labels[slot_id].append(substat_label)
         
         # Configure grid weights for 2x3 layout
@@ -148,16 +161,25 @@ class LoadoutManagerView(BaseView):
                 module = modules[module_id]
                 self.slot_vars[slot_id].set(f"{module_id}: {module.module_type} - {module.main_stat}")
                 
+                # Update main stat display
+                main_stat_text = f"{module.main_stat}: +{int(module.main_stat_value)}"
+                self.slot_main_stat_labels[slot_id].config(text=main_stat_text)
+                
                 # Update substats display
                 for i, substat_label in enumerate(self.slot_substats_labels[slot_id]):
                     if i < len(module.substats):
                         substat = module.substats[i]
-                        text = f"{substat.stat_name}: +{int(substat.current_value)}"
-                        substat_label.config(text=text)
+                        if substat.stat_name:  # Only show non-empty substats
+                            text = f"{substat.stat_name}: +{int(substat.current_value)}"
+                            substat_label.config(text=text)
+                        else:
+                            substat_label.config(text="")
                     else:
                         substat_label.config(text="")
             else:
                 self.slot_vars[slot_id].set("None")
+                # Clear main stat display
+                self.slot_main_stat_labels[slot_id].config(text="")
                 # Clear substats display
                 for substat_label in self.slot_substats_labels[slot_id]:
                     substat_label.config(text="")

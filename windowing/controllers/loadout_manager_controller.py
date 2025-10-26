@@ -80,6 +80,8 @@ class LoadoutManagerController(BaseController):
                 # Clear slot
                 self.model.assign_module_to_loadout(loadout_name, slot_id, None)
                 
+                # Clear main stat display
+                self.view.slot_main_stat_labels[slot_id].config(text="")
                 # Clear substats display
                 for substat_label in self.view.slot_substats_labels[slot_id]:
                     substat_label.config(text="")
@@ -88,14 +90,22 @@ class LoadoutManagerController(BaseController):
                 module_id = selection.split(":")[0]
                 self.model.assign_module_to_loadout(loadout_name, slot_id, module_id)
                 
-                # Update substats display
+                # Update main stat and substats display
                 module = self.model.get_module_by_id(module_id)
                 if module:
+                    # Update main stat display
+                    main_stat_text = f"{module.main_stat}: +{int(module.main_stat_value)}"
+                    self.view.slot_main_stat_labels[slot_id].config(text=main_stat_text)
+                    
+                    # Update substats display
                     for i, substat_label in enumerate(self.view.slot_substats_labels[slot_id]):
                         if i < len(module.substats):
                             substat = module.substats[i]
-                            text = f"{substat.stat_name}: +{int(substat.current_value)}"
-                            substat_label.config(text=text)
+                            if substat.stat_name:  # Only show non-empty substats
+                                text = f"{substat.stat_name}: +{int(substat.current_value)}"
+                                substat_label.config(text=text)
+                            else:
+                                substat_label.config(text="")
                         else:
                             substat_label.config(text="")
             
