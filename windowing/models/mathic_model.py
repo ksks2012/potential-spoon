@@ -63,20 +63,26 @@ class MathicModel(BaseModel):
             # Update substats if provided
             if substats_data:
                 from mathic.mathic_system import Substat
-                module.substats = []
-                module.total_enhancement_rolls = 0  # Reset roll count
+                new_substats = []
+                new_total_rolls = 0
                 for substat_data in substats_data:
                     stat_name = substat_data.get('stat_name')
-                    value = substat_data.get('value')
-                    rolls = substat_data.get('rolls', 1)
-                    
-                    if stat_name and stat_name != "" and value is not None:
+                    # Accept both 'current_value' and legacy 'value'
+                    value = substat_data.get('current_value', substat_data.get('value', 0))
+                    rolls = substat_data.get('rolls', substat_data.get('rolls_used', 0))
+
+                    if stat_name and stat_name != "" and rolls and int(rolls) > 0:
                         try:
-                            substat = Substat(stat_name, float(value), rolls)
-                            module.substats.append(substat)
-                            module.total_enhancement_rolls += rolls
+                            substat = Substat(stat_name, float(value), int(rolls))
+                            new_substats.append(substat)
+                            new_total_rolls += int(rolls)
                         except (ValueError, TypeError):
                             continue
+
+                # Only overwrite if we have at least one valid substat
+                if new_substats:
+                    module.substats = new_substats
+                    module.total_enhancement_rolls = new_total_rolls
             
             # Save changes to database
             if self.mathic_system.db.save_module(module):

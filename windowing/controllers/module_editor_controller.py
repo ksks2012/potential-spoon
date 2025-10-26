@@ -439,6 +439,17 @@ class ModuleEditorController(BaseController):
                 messagebox.showinfo("Success", message)
                 # Refresh displays
                 self.refresh_module_list()
+
+                # Restore selection by module_id
+                try:
+                    if hasattr(self.view, 'module_ids') and module_id in self.view.module_ids:
+                        idx = self.view.module_ids.index(module_id)
+                        self.view.module_listbox.selection_set(idx)
+                        self.view.module_listbox.activate(idx)
+                except Exception:
+                    pass
+
+                # Update module details
                 module = self.model.get_module_by_id(module_id)
                 self.view.update_module_details(module)
             else:

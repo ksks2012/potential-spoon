@@ -302,10 +302,29 @@ class ModuleEditorView(BaseView):
     
     def update_display(self, modules):
         """Update module list display"""
+        # Preserve selection by module id
+        try:
+            current_selection = self.get_selected_module_index()
+            selected_id = None
+            if current_selection is not None and hasattr(self, 'module_ids'):
+                if 0 <= current_selection < len(self.module_ids):
+                    selected_id = self.module_ids[current_selection]
+        except Exception:
+            selected_id = None
+
+        # Rebuild module id list and listbox entries
         self.module_listbox.delete(0, tk.END)
-        for module_id, module in modules.items():
-            display_text = f"{module.module_type} - {module.main_stat} ({module.level}) - {module.matrix} ({'' if module.matrix == '' else module.matrix_count})"
+        self.module_ids = list(modules.keys())
+        for module_id in self.module_ids:
+            module = modules[module_id]
+            display_text = f"{module.module_type} - {module.main_stat} ({module.level}) - {module.matrix} ({'' if getattr(module, 'matrix', '') == '' else getattr(module, 'matrix_count', '')})"
             self.module_listbox.insert(tk.END, display_text)
+
+        # Restore previous selection if possible
+        if selected_id and selected_id in self.module_ids:
+            idx = self.module_ids.index(selected_id)
+            self.module_listbox.selection_set(idx)
+            self.module_listbox.activate(idx)
     
     def update_module_details(self, module):
         """Update module details display"""
@@ -350,12 +369,21 @@ class ModuleEditorView(BaseView):
             if i < len(module.substats):
                 substat = module.substats[i]
                 type_var.set(substat.stat_name or "")
-                # Only set value if there are rolls, otherwise leave empty
-                if substat.rolls_used > 0 and substat.current_value:
-                    value_var.set(str(int(substat.current_value)))
+                # Set value if substat exists; show 0 when rolls exist but value is 0
+                if substat.stat_name:
+                    if substat.current_value is not None and substat.current_value > 0:
+                        value_var.set(str(int(substat.current_value)))
+                    elif substat.rolls_used and substat.rolls_used > 0:
+                        value_var.set(str(int(substat.current_value or 0)))
+                    else:
+                        value_var.set("")
+                # Set rolls, minimum 1 if stat name exists
+                if substat.stat_name and substat.rolls_used > 0:
+                    rolls_var.set(str(substat.rolls_used))
+                elif substat.stat_name:
+                    rolls_var.set("1")  # Default to 1 roll if stat exists but no rolls recorded
                 else:
-                    value_var.set("")
-                rolls_var.set(str(substat.rolls_used))
+                    rolls_var.set("0")
             else:
                 type_var.set("")
                 value_var.set("")
@@ -453,17 +481,55 @@ class ModuleEditorView(BaseView):
                                               (self.substat2_type_var, self.substat2_value_var, self.substat2_rolls_var),
                                               (self.substat3_type_var, self.substat3_value_var, self.substat3_rolls_var),
                                               (self.substat4_type_var, self.substat4_value_var, self.substat4_rolls_var)]:
+            stat_name = type_var.get().strip()
+            value_str = value_var.get().strip()
+            rolls_str = rolls_var.get().strip()
+            
+            # Only process if stat name exists
+            current_value = 0
+            rolls_used = 0
+            
+            if stat_name:
+                try:
+                    current_value = float(value_str) if value_str else 0
+                    rolls_used = int(rolls_str) if rolls_str else 1  # Default to 1 roll if stat exists
+                except (ValueError, TypeError):
+                    current_value = 0
+                    rolls_used = 1 if stat_name else 0
+            
             substats_data.append({
-                'stat_name': type_var.get(),
-                'current_value': float(value_var.get()) if value_var.get() else 0,
-                'rolls_used': int(rolls_var.get()) if rolls_var.get() else 0,
-                'rolls': int(rolls_var.get()) if rolls_var.get() else 0
+                'stat_name': stat_name,
+                'current_value': current_value,
+                'rolls_used': rolls_used,
+                'rolls': rolls_used
             })
         
+        # Coerce main stat value to number when possible
+        main_val_str = self.main_stat_value_var.get().strip()
+        try:
+            main_stat_value = float(main_val_str) if main_val_str != "" else 0.0
+        except (ValueError, TypeError):
+            main_stat_value = 0.0
+
+        # Ensure rolls and numeric fields are proper types
+        for d in substats_data:
+            # normalize keys for model compatibility
+            if 'rolls_used' in d and 'rolls' not in d:
+                d['rolls'] = int(d.get('rolls_used', 0))
+            # ensure numeric types
+            try:
+                d['current_value'] = float(d.get('current_value', 0))
+            except (ValueError, TypeError):
+                d['current_value'] = 0.0
+            try:
+                d['rolls'] = int(d.get('rolls', 0))
+            except (ValueError, TypeError):
+                d['rolls'] = 0
+
         return {
             'module_type': self.module_type_var.get(),
             'main_stat': self.main_stat_var.get(),
-            'main_stat_value': self.main_stat_value_var.get(),
+            'main_stat_value': main_stat_value,
             'substats_data': substats_data,
             'max_enhancements': int(self.max_enhancements_var.get()) if self.max_enhancements_var.get().isdigit() else 5
         }
