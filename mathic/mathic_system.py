@@ -606,6 +606,7 @@ class MathicSystem:
             return {
                 "total_value": 0.0, 
                 "efficiency": 0.0, 
+                "roll_efficiency": 0.0,
                 "details": {},
                 "defense_score": 0.0,
                 "support_score": 0.0,
@@ -681,10 +682,19 @@ class MathicSystem:
         
         overall_efficiency = (total_value / total_max_value * 100) if total_max_value > 0 else 0
         
+        # Calculate roll efficiency safely
+        roll_efficiency = 0.0
+        if hasattr(module, 'max_total_rolls') and module.max_total_rolls > 0:
+            roll_efficiency = module.total_enhancement_rolls / module.max_total_rolls * 100
+        elif hasattr(module, 'get_max_possible_total_rolls'):
+            max_possible = module.get_max_possible_total_rolls()
+            if max_possible > 0:
+                roll_efficiency = module.total_enhancement_rolls / max_possible * 100
+        
         return {
             "total_value": total_value,
             "efficiency": overall_efficiency,
-            "roll_efficiency": module.total_enhancement_rolls / module.max_total_rolls * 100,
+            "roll_efficiency": roll_efficiency,
             "details": details,
             "defense_score": defense_score,
             "support_score": support_score,

@@ -27,6 +27,7 @@ class EtheriaApplication:
         self.root = tk.Tk()
         
         # Initialize models
+        print("Initializing models...")
         self.models = {
             'character': CharacterModel(),
             'mathic': MathicModel(),
@@ -36,11 +37,20 @@ class EtheriaApplication:
         # Initialize app state
         self.app_state = AppState()
         
+        # Initialize all models
+        print("Loading data...")
+        for name, model in self.models.items():
+            print(f"Initializing {name} model...")
+            model.initialize()
+        self.app_state.initialize()
+        
         # Initialize main view
+        print("Creating user interface...")
         self.main_view = MainView(self.root)
         self.main_view.create_widgets()
         
         # Initialize application controller
+        print("Setting up controllers...")
         self.app_controller = ApplicationController(
             self.models, 
             self.main_view, 
@@ -49,6 +59,8 @@ class EtheriaApplication:
         
         # Setup periodic status updates
         self._setup_status_updates()
+        
+        print("Application initialized successfully!")
     
     def _setup_status_updates(self):
         """Setup periodic status updates from app state to view"""
@@ -65,7 +77,14 @@ class EtheriaApplication:
         """Run the application"""
         try:
             # Initialize all controllers
+            print("Initializing controllers...")
             self.app_controller.initialize()
+            
+            # Show startup info
+            print(f"Character data: {len(self.models['character']._characters)} characters loaded")
+            print(f"Mathic modules: {len(self.models['mathic'].get_all_modules())} modules loaded")
+            print(f"Shell data: {len(self.models['shell']._shells)} shells loaded")
+            print("Starting application...")
             
             # Start the main event loop
             self.root.mainloop()
