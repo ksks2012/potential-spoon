@@ -350,7 +350,18 @@ class ModuleEditorView(BaseView):
         
         for substat in module.substats:
             if substat.stat_name:
-                efficiency = f"{(substat.current_value / (substat.rolls_used * 10)) * 100:.1f}%" if substat.rolls_used > 0 else "0%"
+                # Calculate efficiency based on actual max values from config
+                efficiency = "0%"
+                if substat.current_value > 0 and self.controller and hasattr(self.controller, 'model'):
+                    try:
+                        # Get max value from mathic system config
+                        config_data = self.controller.model.mathic_system.config.get('substats', {}).get(substat.stat_name, {})
+                        max_val = config_data.get('max_value', 1)
+                        efficiency_percent = (substat.current_value / max_val) * 100
+                        efficiency = f"{efficiency_percent:.1f}%"
+                    except Exception:
+                        efficiency = "N/A"
+                
                 self.substats_tree.insert('', 'end', values=(
                     substat.stat_name,
                     int(substat.current_value),
