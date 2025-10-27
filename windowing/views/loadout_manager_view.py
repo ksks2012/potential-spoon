@@ -5,6 +5,8 @@ Loadout Manager View for the Etheria Simulation Suite
 
 import tkinter as tk
 from tkinter import ttk
+import os
+from PIL import Image, ImageTk
 from .base_view import BaseView
 
 
@@ -22,7 +24,12 @@ class LoadoutManagerView(BaseView):
         self.slot_vars = {}
         self.slot_main_stat_labels = {}
         self.slot_substats_labels = {}
+        self.slot_matrix_labels = {}  # For matrix images
         self.stats_summary_text = None
+        
+        # Matrix images cache
+        self.matrix_images = {}
+        self.matrix_image_path = "./img/matrices/"
         
     def create_widgets(self):
         """Create loadout manager widgets"""
@@ -89,9 +96,18 @@ class LoadoutManagerView(BaseView):
             self.slot_combos[slot_id].bind('<<ComboboxSelected>>', 
                                          lambda e, s=slot_id: self.controller.on_slot_module_change(s) if self.controller else None)
             
+            # Matrix image display
+            matrix_frame = ttk.Frame(slot_frame)
+            matrix_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+            
+            ttk.Label(matrix_frame, text="Matrix:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky=tk.W)
+            self.slot_matrix_labels[slot_id] = ttk.Label(matrix_frame, text="None", width=10, 
+                                                        font=("Arial", 9), foreground="darkgreen")
+            self.slot_matrix_labels[slot_id].grid(row=0, column=1, sticky=tk.W, padx=(5, 0))
+            
             # Main stat display
             main_stat_frame = ttk.Frame(slot_frame)
-            main_stat_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+            main_stat_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
             
             ttk.Label(main_stat_frame, text="Main Stat:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky=tk.W)
             self.slot_main_stat_labels[slot_id] = ttk.Label(main_stat_frame, text="", 
@@ -100,7 +116,7 @@ class LoadoutManagerView(BaseView):
             
             # Substats display area
             substats_frame = ttk.Frame(slot_frame)
-            substats_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
+            substats_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(5, 0))
             
             # Substats header
             ttk.Label(substats_frame, text="Substats:", font=("Arial", 9, "bold")).grid(row=0, column=0, sticky=tk.W, pady=(0, 3))
@@ -130,6 +146,37 @@ class LoadoutManagerView(BaseView):
         # Configure grid weights
         stats_frame.columnconfigure(0, weight=1)
         stats_frame.rowconfigure(0, weight=1)
+    
+    def _load_matrix_image(self, matrix_name):
+        """Load and cache matrix image"""
+        if not matrix_name or matrix_name == "":
+            return None
+            
+        if matrix_name in self.matrix_images:
+            return self.matrix_images[matrix_name]
+        
+        try:
+            # Convert matrix name to file name format (same as shell_view)
+            file_name = f"set_{matrix_name.lower()}.webp"
+            image_path = os.path.join(self.matrix_image_path, file_name)
+            
+            if os.path.exists(image_path):
+                # Load and resize image
+                pil_image = Image.open(image_path)
+                # Resize to a small size for slot display (32x32 pixels)
+                pil_image = pil_image.resize((32, 32), Image.Resampling.LANCZOS)
+                tk_image = ImageTk.PhotoImage(pil_image)
+                
+                # Cache the image
+                self.matrix_images[matrix_name] = tk_image
+                return tk_image
+            else:
+                print(f"Warning: Image not found for matrix '{matrix_name}' at {image_path}")
+                return None
+                
+        except Exception as e:
+            print(f"Error loading image for matrix '{matrix_name}': {e}")
+            return None
     
     def update_display(self, data):
         """Update loadout list"""
@@ -161,6 +208,17 @@ class LoadoutManagerView(BaseView):
                 module = modules[module_id]
                 self.slot_vars[slot_id].set(f"{module_id}: {module.module_type} - {module.main_stat}")
                 
+                # Update matrix display
+                matrix_name = getattr(module, 'matrix', '')
+                if matrix_name:
+                    matrix_image = self._load_matrix_image(matrix_name)
+                    if matrix_image:
+                        self.slot_matrix_labels[slot_id].config(image=matrix_image, text="", compound=tk.LEFT)
+                    else:
+                        self.slot_matrix_labels[slot_id].config(image="", text=matrix_name)
+                else:
+                    self.slot_matrix_labels[slot_id].config(image="", text="None")
+                
                 # Update main stat display
                 main_stat_text = f"{module.main_stat}: +{int(module.main_stat_value)}"
                 self.slot_main_stat_labels[slot_id].config(text=main_stat_text)
@@ -178,6 +236,8 @@ class LoadoutManagerView(BaseView):
                         substat_label.config(text="")
             else:
                 self.slot_vars[slot_id].set("None")
+                # Clear matrix display
+                self.slot_matrix_labels[slot_id].config(image="", text="None")
                 # Clear main stat display
                 self.slot_main_stat_labels[slot_id].config(text="")
                 # Clear substats display

@@ -3,6 +3,7 @@
 Loadout Manager Controller for the Etheria Simulation Suite
 """
 
+import tkinter as tk
 from tkinter import messagebox
 from .base_controller import BaseController
 
@@ -80,6 +81,8 @@ class LoadoutManagerController(BaseController):
                 # Clear slot
                 self.model.assign_module_to_loadout(loadout_name, slot_id, None)
                 
+                # Clear matrix display
+                self.view.slot_matrix_labels[slot_id].config(image="", text="None")
                 # Clear main stat display
                 self.view.slot_main_stat_labels[slot_id].config(text="")
                 # Clear substats display
@@ -93,6 +96,17 @@ class LoadoutManagerController(BaseController):
                 # Update main stat and substats display
                 module = self.model.get_module_by_id(module_id)
                 if module:
+                    # Update matrix display
+                    matrix_name = getattr(module, 'matrix', '')
+                    if matrix_name:
+                        matrix_image = self.view._load_matrix_image(matrix_name)
+                        if matrix_image:
+                            self.view.slot_matrix_labels[slot_id].config(image=matrix_image, text="", compound=tk.LEFT)
+                        else:
+                            self.view.slot_matrix_labels[slot_id].config(image="", text=matrix_name)
+                    else:
+                        self.view.slot_matrix_labels[slot_id].config(image="", text="None")
+                    
                     # Update main stat display
                     main_stat_text = f"{module.main_stat}: +{int(module.main_stat_value)}"
                     self.view.slot_main_stat_labels[slot_id].config(text=main_stat_text)
