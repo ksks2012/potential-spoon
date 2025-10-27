@@ -10,9 +10,10 @@ from .base_controller import BaseController
 class ModuleEditorController(BaseController):
     """Controller for module editing"""
     
-    def __init__(self, model, view, app_state):
+    def __init__(self, model, view, app_state, app_controller=None):
         super().__init__(model, view)
         self.app_state = app_state
+        self.app_controller = app_controller
     
     def initialize(self):
         """Initialize module editor controller"""
@@ -452,6 +453,10 @@ class ModuleEditorController(BaseController):
                 # Update module details
                 module = self.model.get_module_by_id(module_id)
                 self.view.update_module_details(module)
+                
+                # Notify other controllers about module changes (including matrix changes)
+                if self.app_controller:
+                    self.app_controller.notify_module_update(module_id)
             else:
                 messagebox.showerror("Error", message)
                 

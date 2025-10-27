@@ -35,7 +35,8 @@ class ApplicationController:
         self.module_editor_controller = ModuleEditorController(
             models['mathic'], 
             views.get_module_editor_view(), 
-            app_state
+            app_state,
+            self  # Pass application controller reference
         )
         
         self.enhance_simulator_controller = EnhanceSimulatorController(
@@ -113,3 +114,11 @@ class ApplicationController:
         # Refresh other views that might depend on the data
         self.module_editor_controller.refresh_module_list()
         self.loadout_manager_controller.refresh_loadout_list()
+    
+    def notify_module_update(self, module_id):
+        """Notify that a specific module has been updated"""
+        # Refresh loadout manager to update matrix display if the module is in any loadout
+        self.loadout_manager_controller.on_module_updated(module_id)
+        
+        # Also refresh system overview
+        self.system_overview_controller.on_data_change()

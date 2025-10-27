@@ -156,6 +156,32 @@ class LoadoutManagerController(BaseController):
             else:
                 messagebox.showerror("Error", "Failed to delete loadout")
     
+    def on_module_updated(self, module_id):
+        """Handle notification that a module has been updated"""
+        current_loadout = self.view.get_selected_loadout()
+        if not current_loadout:
+            return
+            
+        try:
+            # Check if the updated module is in the current loadout
+            loadout = self.model.mathic_system.mathic_loadouts.get(current_loadout, {})
+            module_in_loadout = False
+            
+            for slot_id, assigned_module_id in loadout.items():
+                if assigned_module_id == module_id:
+                    module_in_loadout = True
+                    break
+            
+            # If the module is in the current loadout, refresh the display
+            if module_in_loadout:
+                modules = self.model.get_all_modules()
+                self.view.update_loadout_display(loadout, modules)
+                self._update_loadout_stats(current_loadout)
+                self.app_state.set_status(f"Updated module {module_id} in loadout {current_loadout}")
+                
+        except Exception as e:
+            print(f"Error updating loadout after module change: {e}")
+    
     def _update_loadout_stats(self, loadout_name):
         """Update loadout total stats display"""
         try:
